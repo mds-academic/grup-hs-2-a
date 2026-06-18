@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch, nextTick, reactive } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, reactive } from 'vue';
 import { courseData } from './courseData.js';
 import { getProject, types } from '@theatre/core';
 
@@ -58,7 +58,12 @@ const isLoggedIn = ref(false);
 const loginEmail = ref('');
 const isLoggingIn = ref(false);
 const showLoginError = ref(false);
+
 const showProfileMenu = ref(false);
+
+const isDesktop = ref(window.innerWidth > 1024);
+const updateWidth = () => { isDesktop.value = window.innerWidth > 1024; };
+
 const studentData = ref({ name: '', school: '', email: '' });
 const studentProgress = ref({}); // Menyimpan progress jawaban & attempts
 
@@ -122,6 +127,11 @@ const handleLogin = async () => {
   }
 };
 
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateWidth);
+});
+
 const handleLogout = () => {
   localStorage.removeItem('mds_student_login');
   isLoggedIn.value = false;
@@ -129,7 +139,10 @@ const handleLogout = () => {
   studentData.value = { email: '', name: '', school: '' };
 };
 
+
 onMounted(() => {
+  window.addEventListener('resize', updateWidth);
+
   const savedLogin = localStorage.getItem('mds_student_login');
   if (savedLogin) {
     studentData.value = JSON.parse(savedLogin);
@@ -1385,7 +1398,7 @@ const getStepConfig = (stepId) => {
               </div>
             </aside>
           </div>
-          <details class="lesson-reading-accordion">
+          <details class="lesson-reading-accordion" :open="isDesktop ? true : undefined">
             <summary>Buka Materi Bacaan</summary>
           <div class="lesson-reading">
             <header class="reading-header">
@@ -1486,7 +1499,7 @@ hujan = <span class="code-keyword">True</span>
               </div>
             </aside>
           </div>
-          <details class="lesson-reading-accordion">
+          <details class="lesson-reading-accordion" :open="isDesktop ? true : undefined">
             <summary>Buka Materi Bacaan</summary>
           <div class="lesson-reading">
             <header class="reading-header">
@@ -1596,7 +1609,7 @@ hujan = <span class="code-keyword">True</span>
               </div>
             </aside>
           </div>
-          <details class="lesson-reading-accordion">
+          <details class="lesson-reading-accordion" :open="isDesktop ? true : undefined">
             <summary>Buka Materi Bacaan</summary>
           <div class="lesson-reading">
             <header class="reading-header">
@@ -1702,7 +1715,7 @@ task_done = <span class="code-keyword">True</span>
               </div>
             </aside>
           </div>
-          <details class="lesson-reading-accordion">
+          <details class="lesson-reading-accordion" :open="isDesktop ? true : undefined">
             <summary>Buka Materi Bacaan</summary>
           <div class="lesson-reading">
             <header class="reading-header">
@@ -1802,7 +1815,7 @@ age = 16
               </div>
             </aside>
           </div>
-          <details class="lesson-reading-accordion">
+          <details class="lesson-reading-accordion" :open="isDesktop ? true : undefined">
             <summary>Buka Materi Bacaan</summary>
           <div class="lesson-reading">
             <header class="reading-header">
@@ -1904,7 +1917,7 @@ remedial = <span class="code-keyword">False</span>
               </div>
             </aside>
           </div>
-          <details class="lesson-reading-accordion">
+          <details class="lesson-reading-accordion" :open="isDesktop ? true : undefined">
             <summary>Buka Materi Bacaan</summary>
           <div class="lesson-reading">
             <header class="reading-header">
@@ -2025,7 +2038,7 @@ remaining_money = total_money - total_budget
               <button class="video-control-button video-fullscreen" type="button" @click="toggleFullscreen(7)">⛶</button>
             </div>
           </div>
-          <details class="lesson-reading-accordion">
+          <details class="lesson-reading-accordion" :open="isDesktop ? true : undefined">
             <summary>Buka Materi Bacaan</summary>
           <div class="lesson-reading">
             <iframe src="assignment_slides.html" style="width: 100%; height: 600px; border: 4px solid var(--black); border-radius: 12px; margin-top: 15px; margin-bottom: 30px; box-shadow: 6px 6px 0 var(--black);" title="Instruksi Tugas Akhir"></iframe>

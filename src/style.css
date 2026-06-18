@@ -2233,3 +2233,10 @@ h1, h2, h3, h4, h5, h6, .brand-logo, .tab-title, .video-kicker { font-family: 'F
   opacity: 0;
   transform: translateY(-5px);
 }
+
+@media (min-width: 1025px) {
+  details.lesson-reading-accordion summary {
+    display: none;
+    pointer-events: none;
+  }
+}
