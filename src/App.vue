@@ -98,9 +98,11 @@ const syncToSheets = async () => {
 };
 
 const handleLogin = async () => {
-  if (!loginEmail.value) return;
+  if (!loginEmail.value.trim()) return;
+  
   isLoggingIn.value = true;
   showLoginError.value = false;
+
   try {
     const res = await fetch(`${APP_SCRIPT_URL}?action=login&email=${encodeURIComponent(loginEmail.value)}`);
     const data = await res.json();
@@ -117,6 +119,13 @@ const handleLogin = async () => {
   } finally {
     isLoggingIn.value = false;
   }
+};
+
+const handleLogout = () => {
+  localStorage.removeItem('mds_student_login');
+  isLoggedIn.value = false;
+  loginEmail.value = '';
+  studentData.value = { email: '', name: '', school: '' };
 };
 
 onMounted(() => {
@@ -1197,8 +1206,11 @@ const getStepConfig = (stepId) => {
       </div>
       <div class="student-chip" aria-label="Profil siswa">
         <div class="avatar" aria-hidden="true"></div>
-        <div>
-          <strong>{{ studentData.name || 'Siswa Kalananti' }}</strong>
+        <div class="student-info">
+          <strong>
+            {{ studentData.name || 'Siswa Kalananti' }}
+            <button @click="handleLogout" class="logout-link" title="Keluar">⏏ Keluar</button>
+          </strong>
           <span v-if="studentData.school">{{ studentData.school }}</span>
           <span v-else>Siap lanjut belajar</span>
         </div>
@@ -1360,10 +1372,10 @@ const getStepConfig = (stepId) => {
                 <h3>Kalo bener, gaskeun!</h3>
                 <p>Coba pikirin, apa aja sih keputusan 'if' yang udah kamu buat hari ini?</p>
               </div>
-              <pre class="mini-code">
+              <div class="mini-code">
                 <span class="keyword">if</span> hujan:<br>
                 &nbsp;&nbsp;bawa(<span class="string">"payung"</span>)
-              </pre>
+              </div>
             </aside>
           </div>
           <details class="lesson-reading-accordion">
@@ -1403,11 +1415,11 @@ const getStepConfig = (stepId) => {
                 <li>Kalau musuh keliatan, tembak!</li>
                 <li>Jika pemain mendapat apel, tambah nyawa.</li>
               </ul>
-              <pre class="reading-code"><span class="code-comment"># Komputer mengecek syarat sebelum menjalankan aksi</span>
+              <div class="reading-code"><span class="code-comment"># Komputer mengecek syarat sebelum menjalankan aksi</span>
 hujan = <span class="code-keyword">True</span>
 
 <span class="code-keyword">if</span> hujan:
-    print(<span class="code-string">"Bawa payung"</span>)</pre>
+    print(<span class="code-string">"Bawa payung"</span>)</div>
               <p class="reading-note"><strong>Intinya:</strong> Kondisi itu satpam pintu. Kalo bawa kunci (True), pintu dibuka. Kalo nggak (False), mending pulang!</p>
             </article>
 
@@ -1508,12 +1520,12 @@ hujan = <span class="code-keyword">True</span>
 
             <article class="reading-section">
               <h4>Contoh dua jalan keputusan</h4>
-              <pre class="reading-code">age = 15
+              <div class="reading-code">age = 15
 
 <span class="code-keyword">if</span> age &gt;= 17:
     print(<span class="code-string">"Boleh membuat KTP"</span>)
 <span class="code-keyword">else</span>:
-    print(<span class="code-string">"Belum boleh membuat KTP"</span>)</pre>
+    print(<span class="code-string">"Belum boleh membuat KTP"</span>)</div>
               <p class="reading-note">Python hanya menjalankan <strong>satu cabang</strong>. Karena <code>15 &gt;= 17</code> bernilai False, program melewati blok <code>if</code> dan menjalankan blok <code>else</code>.</p>
             </article>
 
@@ -1614,7 +1626,7 @@ hujan = <span class="code-keyword">True</span>
 
             <article class="reading-section">
               <h4>Contoh kategori nilai</h4>
-              <pre class="reading-code">score = 82
+              <div class="reading-code">score = 82
 
 <span class="code-keyword">if</span> score &gt;= 90:
     print(<span class="code-string">"Sangat Baik"</span>)
@@ -1623,14 +1635,14 @@ hujan = <span class="code-keyword">True</span>
 <span class="code-keyword">elif</span> score &gt;= 60:
     print(<span class="code-string">"Cukup"</span>)
 <span class="code-keyword">else</span>:
-    print(<span class="code-string">"Perlu latihan lagi"</span>)</pre>
+    print(<span class="code-string">"Perlu latihan lagi"</span>)</div>
               <p class="reading-note">Hasilnya adalah <strong>Baik</strong>. Nilai 82 gagal pada syarat pertama, berhasil pada syarat kedua, lalu Python berhenti memeriksa cabang berikutnya.</p>
             </article>
 
             <article class="reading-section">
               <h4>Mini Project: Smart Checker 👨‍🎓</h4>
               <p>Contoh lain yang sering dipakai adalah mengecek status penyelesaian tugas siswa bersama dengan nilai.</p>
-              <pre class="reading-code">score = 82
+              <div class="reading-code">score = 82
 task_done = <span class="code-keyword">True</span>
 
 <span class="code-keyword">if not</span> task_done:
@@ -1640,7 +1652,7 @@ task_done = <span class="code-keyword">True</span>
 <span class="code-keyword">elif</span> score &gt;= 70:
     print(<span class="code-string">"Lanjut latihan berikutnya"</span>)
 <span class="code-keyword">else</span>:
-    print(<span class="code-string">"Perlu belajar ulang"</span>)</pre>
+    print(<span class="code-string">"Perlu belajar ulang"</span>)</div>
             </article>
 
             <details class="reading-details">
@@ -1725,7 +1737,7 @@ task_done = <span class="code-keyword">True</span>
 
             <article class="reading-section">
               <h4>Contoh pemeriksaan tiket dan umur</h4>
-              <pre class="reading-code">has_ticket = <span class="code-keyword">True</span>
+              <div class="reading-code">has_ticket = <span class="code-keyword">True</span>
 age = 16
 
 <span class="code-keyword">if</span> has_ticket:
@@ -1734,7 +1746,7 @@ age = 16
     <span class="code-keyword">else</span>:
         print(<span class="code-string">"Umur belum cukup"</span>)
 <span class="code-keyword">else</span>:
-    print(<span class="code-string">"Harus punya tiket dulu"</span>)</pre>
+    print(<span class="code-string">"Harus punya tiket dulu"</span>)</div>
               <p class="reading-note">Perhatikan indentasinya. <code>if age</code> berada di dalam <code>if has_ticket</code>, sehingga umur hanya diperiksa ketika pengguna sudah memiliki tiket.</p>
             </article>
 
@@ -1816,25 +1828,25 @@ age = 16
             <article class="reading-section">
               <h4>Contoh Sistem Diskon Toko 🏷️</h4>
               <p>Sebuah toko memberi diskon jika pelanggan mempunyai total belanja &gt;= 100.000 <strong>dan</strong> adalah member, <strong>atau</strong> pelanggan punya kupon spesial.</p>
-              <pre class="reading-code">total = 120000
+              <div class="reading-code">total = 120000
 is_member = <span class="code-keyword">True</span>
 has_coupon = <span class="code-keyword">False</span>
 
 <span class="code-keyword">if</span> (total &gt;= 100000 <span class="code-keyword">and</span> is_member) <span class="code-keyword">or</span> has_coupon:
     print(<span class="code-string">"Mendapat diskon"</span>)
 <span class="code-keyword">else</span>:
-    print(<span class="code-string">"Tidak mendapat diskon"</span>)</pre>
+    print(<span class="code-string">"Tidak mendapat diskon"</span>)</div>
               <p class="reading-note">Tanda kurung <code>()</code> penting digunakan agar prioritas logika lebih mudah dipahami oleh programmer lain!</p>
             </article>
 
             <article class="reading-section">
               <h4>Contoh kondisi kompleks</h4>
-              <pre class="reading-code">score = 80
+              <div class="reading-code">score = 80
 task_done = <span class="code-keyword">True</span>
 remedial = <span class="code-keyword">False</span>
 
 <span class="code-keyword">if</span> score &gt;= 75 <span class="code-keyword">and</span> task_done <span class="code-keyword">and not</span> remedial:
-    print(<span class="code-string">"Semua syarat terpenuhi"</span>)</pre>
+    print(<span class="code-string">"Semua syarat terpenuhi"</span>)</div>
               <p class="reading-note"><code>score &gt;= 75</code>, <code>task_done</code>, dan <code>not remedial</code> semuanya True, jadi blok dijalankan.</p>
             </article>
 
@@ -1847,9 +1859,9 @@ remedial = <span class="code-keyword">False</span>
                   <tr><td><strong>Logical operator</strong></td><td>Beberapa syarat dapat diperiksa sekaligus untuk satu aksi.</td><td>Sudah daftar <code>and</code> sudah membayar.</td></tr>
                 </tbody>
               </table>
-              <pre class="reading-code"><span class="code-comment"># Tanda kurung memperjelas prioritas</span>
+              <div class="reading-code"><span class="code-comment"># Tanda kurung memperjelas prioritas</span>
 <span class="code-keyword">if</span> password_ok <span class="code-keyword">and</span> (is_admin <span class="code-keyword">or</span> is_premium):
-    print(<span class="code-string">"Akses diterima"</span>)</pre>
+    print(<span class="code-string">"Akses diterima"</span>)</div>
             </article>
           </div>
           </details>
@@ -1918,7 +1930,7 @@ remedial = <span class="code-keyword">False</span>
             <article class="reading-section">
               <h4>Analogi Uang Rp 50.000 ⚖️</h4>
               <p>Kalau kamu punya uang Rp 50.000, kamu harus memilih antara buku tulis (kebutuhan) dan stiker lucu (keinginan). Dalam Python, kita bisa membuat program yang mengecek kategori dan uang:</p>
-              <pre class="reading-code">category = <span class="code-string">"kebutuhan"</span>
+              <div class="reading-code">category = <span class="code-string">"kebutuhan"</span>
 price = 15000
 money = 50000
 
@@ -1927,7 +1939,7 @@ money = 50000
 <span class="code-keyword">elif</span> category == <span class="code-string">"keinginan"</span> <span class="code-keyword">and</span> money &gt;= price:
     print(<span class="code-string">"Boleh beli, tapi cek kebutuhan utama sudah terpenuhi belum"</span>)
 <span class="code-keyword">else</span>:
-    print(<span class="code-string">"Uang belum cukup, cari alternatif lebih murah"</span>)</pre>
+    print(<span class="code-string">"Uang belum cukup, cari alternatif lebih murah"</span>)</div>
             </article>
 
             <article class="reading-section">
@@ -1938,7 +1950,7 @@ money = 50000
                 <li>Hitung <code>total_budget</code> dan <code>remaining_money</code>.</li>
                 <li>Gunakan conditional untuk menentukan apakah budget aman, pas, atau terlalu besar.</li>
               </ol>
-              <pre class="reading-code">total_money = 100000
+              <div class="reading-code">total_money = 100000
 food_budget = 40000
 transport_budget = 20000
 school_budget = 25000
@@ -1952,7 +1964,7 @@ remaining_money = total_money - total_budget
 <span class="code-keyword">elif</span> remaining_money == 0:
     print(<span class="code-string">"Budget pas, tidak ada sisa"</span>)
 <span class="code-keyword">else</span>:
-    print(<span class="code-string">"Budget aman, masih ada sisa"</span>)</pre>
+    print(<span class="code-string">"Budget aman, masih ada sisa"</span>)</div>
             </article>
 
             <article class="reading-section">
@@ -1971,7 +1983,7 @@ remaining_money = total_money - total_budget
             <details class="reading-details">
               <summary>Contoh nested condition untuk rekomendasi risiko</summary>
               <div class="reading-details-content">
-                <pre class="reading-code">remaining_money = money - price
+                <div class="reading-code">remaining_money = money - price
 
 <span class="code-keyword">if</span> category == <span class="code-string">"kebutuhan"</span>:
     <span class="code-keyword">if</span> money &gt;= price:
@@ -1984,7 +1996,7 @@ remaining_money = total_money - total_budget
     <span class="code-keyword">elif</span> price &gt; money * 0.5:
         risk_level = <span class="code-string">"Medium"</span>
     <span class="code-keyword">else</span>:
-        risk_level = <span class="code-string">"Low"</span></pre>
+        risk_level = <span class="code-string">"Low"</span></div>
               </div>
             </details>
           </div>
