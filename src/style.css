@@ -2205,3 +2205,52 @@ h1, h2, h3, h4, h5, h6, .brand-logo, .tab-title, .video-kicker { font-family: 'F
     display: block !important;
   }
 }
+
+
+.student-chip {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+}
+.dropdown-icon {
+  font-size: 0.7rem;
+  margin-left: 4px;
+  color: var(--navy-light);
+}
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  min-width: 140px;
+  z-index: 100;
+}
+.dropdown-item {
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--red);
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: background 0.2s;
+}
+.dropdown-item:hover {
+  background: rgba(255, 92, 138, 0.1);
+}
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}

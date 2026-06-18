@@ -58,6 +58,7 @@ const isLoggedIn = ref(false);
 const loginEmail = ref('');
 const isLoggingIn = ref(false);
 const showLoginError = ref(false);
+const showProfileMenu = ref(false);
 const studentData = ref({ name: '', school: '', email: '' });
 const studentProgress = ref({}); // Menyimpan progress jawaban & attempts
 
@@ -1204,16 +1205,22 @@ const getStepConfig = (stepId) => {
         <img class="rg-logo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Ruangguru_logo.svg/3840px-Ruangguru_logo.svg.png" alt="Ruangguru">
         <img class="uob-logo" src="https://cdn-web-2.ruangguru.com/landing-pages/assets/37185db7-24a8-467d-aabb-1d5df48f9bc0.png" alt="UOB">
       </div>
-      <div class="student-chip" aria-label="Profil siswa">
+      <div class="student-chip" aria-label="Profil siswa" @click="showProfileMenu = !showProfileMenu">
         <div class="avatar" aria-hidden="true"></div>
         <div class="student-info">
           <strong>
             {{ studentData.name || 'Siswa Kalananti' }}
-            <button @click="handleLogout" class="logout-link" title="Keluar">⏏ Keluar</button>
+            <span class="dropdown-icon">▼</span>
           </strong>
           <span v-if="studentData.school">{{ studentData.school }}</span>
           <span v-else>Siap lanjut belajar</span>
         </div>
+        
+        <transition name="fade">
+          <div v-if="showProfileMenu" class="profile-dropdown">
+            <button @click.stop="handleLogout" class="dropdown-item">⏏ Keluar</button>
+          </div>
+        </transition>
       </div>
     </header>
 
