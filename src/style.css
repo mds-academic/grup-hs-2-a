@@ -2215,7 +2215,7 @@ h1, h2, h3, h4, h5, h6, .brand-logo, .tab-title, .video-kicker { font-family: 'F
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: var(--red);
+  color: var(--pink);
   font-weight: bold;
   cursor: pointer;
   font-size: 0.95rem;
