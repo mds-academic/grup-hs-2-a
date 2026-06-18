@@ -2024,9 +2024,7 @@ h1, h2, h3, h4, h5, h6, .brand-logo, .tab-title, .video-kicker { font-family: 'F
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.8), rgba(30, 58, 138, 0.9));
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
