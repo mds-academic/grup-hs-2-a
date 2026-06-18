@@ -2066,8 +2066,9 @@ h1, h2, h3, h4, h5, h6, .brand-logo, .tab-title, .video-kicker { font-family: 'F
 
 .login-card h2 {
   color: var(--navy-dark);
-  font-size: 2.2rem;
+  font-size: 1.6rem;
   margin-bottom: 12px;
+  line-height: 1.35;
   font-weight: 800;
   letter-spacing: -0.02em;
 }

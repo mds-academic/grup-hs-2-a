@@ -1177,8 +1177,8 @@ const getStepConfig = (stepId) => {
           <img class="rg-logo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Ruangguru_logo.svg/3840px-Ruangguru_logo.svg.png" alt="Ruangguru">
           <img class="uob-logo" src="https://cdn-web-2.ruangguru.com/landing-pages/assets/37185db7-24a8-467d-aabb-1d5df48f9bc0.png" alt="UOB">
         </div>
-        <h2>Selamat datang di materi Grup A - HS - 2A</h2>
-        <p>Selamat datang di pembelajaran asynchronous UOB My Digital Space powered by Ruangguru</p>
+        <h2>Selamat datang di pembelajaran asynchronous UOB My Digital Space powered by Ruangguru</h2>
+        <p>Materi Grup A - HS - 2A</p>
         <div class="input-group">
           <input type="email" v-model="loginEmail" placeholder="nama@email.com" @keyup.enter="handleLogin" :disabled="isLoggingIn">
           <button @click="handleLogin" :disabled="isLoggingIn" class="login-btn">
