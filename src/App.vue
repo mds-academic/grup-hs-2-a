@@ -55,14 +55,29 @@ const currentStep = ref(1);
 const totalSteps = Object.keys(courseData).length;
 const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz58EffczfpcNL0bvbD6VZvrY3mrVNtmpWasSwJT0baOowD2yGu_KNM0YNul9EtxxKVpg/exec';
 const isLoggedIn = ref(false);
+const loginSchool = ref('');
 const loginEmail = ref('');
+const selectedSchool = ref('');
 const isLoggingIn = ref(false);
 const showLoginError = ref(false);
+const loginErrorTitle = ref('');
+const loginErrorMessage = ref('');
+const schoolOptions = ref([]);
+const isSchoolLoading = ref(false);
+const isSchoolDropdownOpen = ref(false);
+const loginEmailAttempts = ref(0);
+const loginEmailSuggestion = ref(null);
+const emailHelpOpen = ref(false);
+const emailHelpQuery = ref('');
+const emailHelpResults = ref([]);
+const isEmailHelpLoading = ref(false);
 
 const showProfileMenu = ref(false);
 
 const isDesktop = ref(window.innerWidth > 1024);
 const updateWidth = () => { isDesktop.value = window.innerWidth > 1024; };
+let schoolSearchTimer = null;
+let schoolSearchRequestId = 0;
 
 const studentData = ref({ name: '', school: '', email: '' });
 const studentProgress = ref({}); // Menyimpan progress jawaban & attempts
@@ -104,27 +119,132 @@ const syncToSheets = async () => {
 };
 
 const handleLogin = async () => {
-  if (!loginEmail.value.trim()) return;
+  if (!selectedSchool.value || !loginEmail.value.trim()) {
+    loginErrorTitle.value = 'Lengkapi dulu ya';
+    loginErrorMessage.value = 'Pilih sekolah, lalu masukkan email yang terdaftar di Akademia Ruangguru.';
+    showLoginError.value = true;
+    return;
+  }
   
   isLoggingIn.value = true;
   showLoginError.value = false;
+  loginEmailSuggestion.value = null;
 
   try {
-    const res = await fetch(`${APP_SCRIPT_URL}?action=login&email=${encodeURIComponent(loginEmail.value)}`);
+    const nextAttempt = loginEmailAttempts.value + 1;
+    const params = new URLSearchParams({
+      action: 'login',
+      school: selectedSchool.value,
+      email: loginEmail.value,
+      attempts: String(nextAttempt)
+    });
+    const res = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
     const data = await res.json();
     if (data.success) {
       studentData.value = { name: data.name, school: data.school, email: data.email };
       isLoggedIn.value = true;
+      loginEmailAttempts.value = 0;
       localStorage.setItem('mds_student_login', JSON.stringify(studentData.value));
     } else {
+      loginEmailAttempts.value = nextAttempt;
+      loginErrorTitle.value = data.needsRfo ? 'Perlu bantuan RFO' : 'Email belum cocok';
+      loginErrorMessage.value = data.message || 'Email ini belum cocok dengan data Akademia Ruangguru untuk sekolah yang dipilih. Coba cek lagi penulisannya ya.';
+      loginEmailSuggestion.value = data.suggestion || null;
       showLoginError.value = true;
     }
   } catch (err) {
     console.error("Login error", err);
+    loginErrorTitle.value = 'Belum bisa masuk';
+    loginErrorMessage.value = 'Koneksi ke data siswa belum berhasil. Coba lagi sebentar ya.';
     showLoginError.value = true;
   } finally {
     isLoggingIn.value = false;
   }
+};
+
+const fetchSchoolOptions = async (query = loginSchool.value) => {
+  const requestId = ++schoolSearchRequestId;
+  isSchoolLoading.value = true;
+  try {
+    const params = new URLSearchParams({ action: 'schools', query });
+    const res = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
+    const data = await res.json();
+    if (requestId === schoolSearchRequestId && data.success) schoolOptions.value = data.schools || [];
+  } catch (err) {
+    console.error("School search error", err);
+  } finally {
+    if (requestId === schoolSearchRequestId) isSchoolLoading.value = false;
+  }
+};
+
+const fetchEmailHelpResults = async (query = emailHelpQuery.value) => {
+  if (!selectedSchool.value || !query.trim()) {
+    emailHelpResults.value = [];
+    return;
+  }
+  isEmailHelpLoading.value = true;
+  try {
+    const params = new URLSearchParams({ action: 'students', school: selectedSchool.value, query });
+    const res = await fetch(`${APP_SCRIPT_URL}?${params.toString()}`);
+    const data = await res.json();
+    if (data.success) emailHelpResults.value = data.students || [];
+  } catch (err) {
+    console.error("Email help search error", err);
+  } finally {
+    isEmailHelpLoading.value = false;
+  }
+};
+
+const handleSchoolInput = () => {
+  selectedSchool.value = '';
+  loginEmail.value = '';
+  emailHelpQuery.value = '';
+  emailHelpResults.value = [];
+  isSchoolDropdownOpen.value = true;
+  loginEmailAttempts.value = 0;
+  loginEmailSuggestion.value = null;
+  showLoginError.value = false;
+  if (schoolSearchTimer) clearTimeout(schoolSearchTimer);
+  schoolSearchTimer = setTimeout(() => fetchSchoolOptions(), 250);
+};
+
+const handleEmailInput = () => {
+  loginEmailSuggestion.value = null;
+  showLoginError.value = false;
+};
+
+const handleEmailHelpInput = () => {
+  fetchEmailHelpResults();
+};
+
+const openSchoolDropdown = () => {
+  isSchoolDropdownOpen.value = true;
+  fetchSchoolOptions('');
+};
+
+const closeSchoolDropdownSoon = () => {
+  setTimeout(() => {
+    isSchoolDropdownOpen.value = false;
+  }, 120);
+};
+
+const selectSchool = (school) => {
+  loginSchool.value = school;
+  selectedSchool.value = school;
+  loginEmail.value = '';
+  emailHelpQuery.value = '';
+  emailHelpResults.value = [];
+  isSchoolDropdownOpen.value = false;
+  loginEmailAttempts.value = 0;
+  loginEmailSuggestion.value = null;
+  showLoginError.value = false;
+};
+
+const toggleEmailHelp = () => {
+  emailHelpOpen.value = !emailHelpOpen.value;
+  if (!emailHelpOpen.value) return;
+  emailHelpQuery.value = '';
+  emailHelpResults.value = [];
 };
 
 
@@ -135,7 +255,15 @@ onUnmounted(() => {
 const handleLogout = () => {
   localStorage.removeItem('mds_student_login');
   isLoggedIn.value = false;
+  loginSchool.value = '';
   loginEmail.value = '';
+  selectedSchool.value = '';
+  isSchoolDropdownOpen.value = false;
+  loginEmailAttempts.value = 0;
+  loginEmailSuggestion.value = null;
+  emailHelpOpen.value = false;
+  emailHelpQuery.value = '';
+  emailHelpResults.value = [];
   studentData.value = { email: '', name: '', school: '' };
 };
 
@@ -163,13 +291,13 @@ const players = {};
 const timeCheckers = {};
 
 const playerStates = ref({
-  1: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false },
-  2: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false },
-  3: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false },
-  4: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false },
-  5: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false },
-  6: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false },
-  7: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false },
+  1: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
+  2: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
+  3: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
+  4: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
+  5: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
+  6: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
+  7: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
 });
 
 const isFullscreen = ref(false);
@@ -190,7 +318,8 @@ const quizState = ref({
   activeQuizStep: null,
   replayingQuizVideo: false,
   replayCheckpointArmed: false,
-  choicesDisabled: false
+  choicesDisabled: false,
+  selectedChoice: null
 });
 
 const quizReturn = ref({
@@ -223,6 +352,20 @@ const enforceVideoStartBoundary = (stepId) => {
   const startBoundary = getVideoStartBoundary(stepId);
   if (startBoundary > 0 && player.getCurrentTime() < startBoundary - 0.5) {
     player.seekTo(startBoundary, true);
+  }
+};
+
+const restartVideoFromBoundary = (stepId, shouldPlay = true) => {
+  const player = players[stepId];
+  if (!player || typeof player.seekTo !== "function") return;
+
+  const startBoundary = getVideoStartBoundary(stepId);
+  player.seekTo(startBoundary, true);
+  playerStates.value[stepId].currentTime = startBoundary;
+  playerStates.value[stepId].progress = getSeekValue(stepId);
+
+  if (shouldPlay && typeof player.playVideo === "function") {
+    player.playVideo();
   }
 };
 
@@ -344,6 +487,7 @@ const initializeYouTubePlayer = (stepId) => {
       playsinline: 1,
       rel: 0,
       controls: 0,
+      vq: 'hd1080',
       disablekb: 1,
       fs: 0,
       iv_load_policy: 3,
@@ -373,6 +517,8 @@ const initializeYouTubePlayer = (stepId) => {
 
 const handlePlayerStateChange = (stepId, event) => {
   const isPlaying = event.data === window.YT.PlayerState.PLAYING;
+  const isBuffering = event.data === window.YT.PlayerState.BUFFERING;
+  playerStates.value[stepId].isBuffering = isBuffering;
   playerStates.value[stepId].isPlaying = isPlaying;
 
   if (isPlaying) {
@@ -382,6 +528,9 @@ const handlePlayerStateChange = (stepId, event) => {
 
   if (event.data === window.YT.PlayerState.ENDED) {
     videoWatchedStatus.value[stepId] = true;
+    if (checkVideoQuizzes(stepId)) return;
+    restartVideoFromBoundary(stepId);
+    return;
   }
 
   updateVideoControls(stepId);
@@ -418,9 +567,11 @@ const checkVideoQuizzes = (stepId) => {
 
       const shouldResume = quiz.resume !== undefined ? quiz.resume : true;
       openQuiz(quiz.questions, shouldResume, quiz.resumeTime, quiz, stepId);
-      break;
+      return true;
     }
   }
+
+  return false;
 };
 
 // Quiz Functions
@@ -465,6 +616,7 @@ const openQuiz = (questionsArray, shouldResume = false, seekTime = null, quizCon
   quizState.value.isOpen = true;
   sheet.sequence.play({ direction: 'normal', range: [0, 0.4] });
   quizState.value.choicesDisabled = false;
+  quizState.value.selectedChoice = null;
   quizState.value.quizFeedback = '';
   quizState.value.quizFeedbackType = '';
   quizState.value.isNextBtnVisible = false;
@@ -498,6 +650,13 @@ const currentQuestion = computed(() => {
   }
   return null;
 });
+
+const getQuestionChoices = (question) => {
+  if (!question) return [];
+  if (Array.isArray(question.choices) && question.choices.length > 0) return question.choices;
+  if (typeof question.answer === "boolean") return ["True", "False"];
+  return [];
+};
 
 const isQuizFinished = computed(() => {
   return quizState.value.shuffledQuestions.length > 0 && 
@@ -606,12 +765,12 @@ const registerFailedInputAttempt = (btn, feedbackEl) => {
 
   if (attempts >= 3) {
     attemptStatus.classList.add("limit-reached");
-    attemptStatus.innerHTML = "<strong>Sudah 3 kali mencoba.</strong><br>Jawabanmu masih belum tepat. Perhatikan lagi videonya, ya. Untuk sekarang kamu boleh lanjut dulu.";
+    attemptStatus.innerHTML = "<strong>Belum tepat.</strong><br>Untuk sesi ini, nilai bagian ini dikosongkan dulu. Silakan lanjut, tapi tonton bagian videonya lebih teliti sebelum mengerjakan sesi berikutnya.";
     btn.disabled = true;
     btn.style.opacity = "0.55";
     revealQuizNext("Lanjut dulu →");
   } else {
-    attemptStatus.textContent = `Percobaan ${attempts} dari 3. Periksa kembali kode atau jawabanmu sebelum mencoba lagi.`;
+    attemptStatus.textContent = "Jawabanmu belum tepat. Coba cek lagi perlahan dan perhatikan petunjuk dari video.";
   }
 
   feedbackEl.appendChild(attemptStatus);
@@ -621,7 +780,11 @@ const handleStandardAnswer = (answer) => {
   const item = currentQuestion.value;
   if (!item) return;
 
-  const isCorrect = answer === item.answer;
+  const expectedAnswer = item.answer ?? item.correct;
+  const normalizedAnswer = typeof answer === "string" ? answer.trim().toLowerCase() : answer;
+  const normalizedExpected = typeof expectedAnswer === "string" ? expectedAnswer.trim().toLowerCase() : expectedAnswer;
+  const isCorrect = normalizedAnswer === normalizedExpected;
+  quizState.value.selectedChoice = answer;
   quizState.value.choicesDisabled = true;
 
   quizState.value.quizFeedbackType = isCorrect ? 'correct' : 'wrong';
@@ -637,6 +800,7 @@ const goToNextQuestion = () => {
   }
   quizState.value.currentQuestionIdx += 1;
   quizState.value.choicesDisabled = false;
+  quizState.value.selectedChoice = null;
   quizState.value.quizFeedback = '';
   quizState.value.quizFeedbackType = '';
   quizState.value.isNextBtnVisible = false;
@@ -1186,28 +1350,84 @@ const getStepConfig = (stepId) => {
   <transition name="fade">
     <div v-if="!isLoggedIn" class="login-overlay">
       <div class="login-card">
-        <div class="brand-group-login">
-          <img class="rg-logo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Ruangguru_logo.svg/3840px-Ruangguru_logo.svg.png" alt="Ruangguru">
-          <img class="uob-logo" src="https://cdn-web-2.ruangguru.com/landing-pages/assets/37185db7-24a8-467d-aabb-1d5df48f9bc0.png" alt="UOB">
-        </div>
-        <h2>Selamat datang di pembelajaran asynchronous UOB My Digital Space powered by Ruangguru</h2>
-        <p>Materi Grup A - HS - 2A</p>
-        <div class="input-group">
-          <input type="email" v-model="loginEmail" placeholder="nama@email.com" @keyup.enter="handleLogin" :disabled="isLoggingIn">
-          <button @click="handleLogin" :disabled="isLoggingIn" class="login-btn">
-            {{ isLoggingIn ? 'Memuat...' : 'Mulai Belajar 🚀' }}
-          </button>
-        </div>
-        
-        <transition name="pop">
-          <div v-if="showLoginError" class="login-error-msg">
-            <span class="icon">❌</span>
-            <div>
-              <strong>Oops! Email kamu belum terdaftar.</strong>
-              <p>Yuk hubungi guru PIC MDS untuk mendaftarkan datamu ke sistem ya!</p>
-            </div>
+        <div class="login-copy">
+          <div class="brand-group-login">
+            <img class="rg-logo" src="https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Ruangguru_logo.svg/3840px-Ruangguru_logo.svg.png" alt="Ruangguru">
+            <img class="uob-logo" src="https://cdn-web-2.ruangguru.com/landing-pages/assets/37185db7-24a8-467d-aabb-1d5df48f9bc0.png" alt="UOB">
           </div>
-        </transition>
+          <span class="login-kicker">UOB My Digital Space</span>
+          <h1>Python Learning Dashboard</h1>
+          <p>Masuk dengan email siswa untuk membuka materi kelasmu.</p>
+          <div class="login-highlights" aria-label="Fitur pembelajaran">
+            <span>High School</span>
+            <span>Python</span>
+            <span>Async Class</span>
+          </div>
+        </div>
+
+        <div class="login-form-panel">
+          <span class="login-step">Materi Grup A - HS - 2A</span>
+          <h2>Masuk ke kelas</h2>
+          <div class="input-group">
+            <label for="login-school-a">Nama sekolah</label>
+            <div class="login-combobox">
+              <input id="login-school-a" type="text" v-model="loginSchool" placeholder="Cari nama sekolah" autocomplete="off" @focus="openSchoolDropdown" @blur="closeSchoolDropdownSoon" @input="handleSchoolInput" :disabled="isLoggingIn">
+              <div v-if="isSchoolDropdownOpen" class="login-dropdown">
+                <template v-if="!isSchoolLoading">
+                  <button v-for="school in schoolOptions" :key="school" type="button" @mousedown.prevent="selectSchool(school)">
+                    {{ school }}
+                  </button>
+                </template>
+                <p v-if="isSchoolLoading">Memuat data sekolah...</p>
+                <p v-else-if="!schoolOptions.length">Sekolah tidak ditemukan.</p>
+              </div>
+            </div>
+
+            <label for="login-email-a">Email terdaftar di Akademia Ruangguru</label>
+            <input id="login-email-a" type="email" v-model="loginEmail" placeholder="nama@email.com" @input="handleEmailInput" @keyup.enter="handleLogin" :disabled="isLoggingIn || !selectedSchool">
+
+            <button type="button" class="login-help-toggle" @click="toggleEmailHelp" :disabled="!selectedSchool">
+              Tidak yakin emailnya? Cari bantuan lewat nama/email
+            </button>
+
+            <div v-if="emailHelpOpen" class="email-help-panel">
+              <label for="login-help-a">Cari nama siswa/orang tua atau email</label>
+              <input id="login-help-a" type="text" v-model="emailHelpQuery" placeholder="Contoh: Taylor atau gmail" @input="handleEmailHelpInput">
+              <div class="email-help-results">
+                <p v-if="!emailHelpQuery.trim()">Ketik nama atau sebagian email yang mungkin terdaftar.</p>
+                <p v-else-if="isEmailHelpLoading">Mencari data...</p>
+                <p v-else-if="!emailHelpResults.length">Belum ada data yang mirip di sekolah ini.</p>
+                <div v-for="student in emailHelpResults" :key="`${student.school}-${student.name}-${student.maskedEmail}`" class="email-help-result">
+                  <strong>{{ student.name }}</strong>
+                  <span class="email-help-label">Email terdaftar:</span>
+                  <code v-if="student.maskedEmail">{{ student.maskedEmail }}</code>
+                  <span v-else class="email-help-missing">Email belum tersedia. Coba cek lagi email yang didaftarkan di Akademia Ruangguru.</span>
+                </div>
+                <p v-if="emailHelpResults.length" class="email-help-note">Gunakan email terdaftar di atas untuk masuk ke kelas.</p>
+              </div>
+            </div>
+
+            <button @click="handleLogin" :disabled="isLoggingIn || !selectedSchool || !loginEmail.trim()" class="login-btn">
+              {{ isLoggingIn ? 'Memuat...' : 'Mulai Belajar' }}
+            </button>
+          </div>
+          <p class="login-helper">Gunakan email pribadi yang sudah didaftarkan di Akademia Ruangguru.</p>
+
+          <transition name="pop">
+            <div v-if="showLoginError" class="login-error-msg">
+              <span class="icon">!</span>
+              <div>
+                <strong>{{ loginErrorTitle }}</strong>
+                <p>{{ loginErrorMessage }}</p>
+                <div v-if="loginEmailSuggestion" class="registered-email-card">
+                  <span>Email terdaftar di sekolah ini:</span>
+                  <strong>{{ loginEmailSuggestion.maskedEmail || 'Email belum tersedia' }}</strong>
+                  <p>Coba cek lagi tanda titik, huruf yang tertukar, atau domain emailnya.</p>
+                </div>
+              </div>
+            </div>
+          </transition>
+        </div>
       </div>
     </div>
   </transition>
@@ -1248,10 +1468,10 @@ const getStepConfig = (stepId) => {
         <div class="mission-progress" aria-label="Progres pembelajaran">
           <div class="progress-copy">
             <span>Progres misi</span>
-            <span id="progressText">{{ currentStep }} dari 7</span>
+            <span id="progressText">{{ currentStep }} dari {{ totalSteps }}</span>
           </div>
           <div class="progress-track">
-            <div class="progress-fill" :style="{ width: (currentStep / 7 * 100) + '%' }"></div>
+            <div class="progress-fill" :style="{ width: (currentStep / totalSteps * 100) + '%' }"></div>
           </div>
         </div>
 
@@ -1357,7 +1577,10 @@ const getStepConfig = (stepId) => {
             <div class="custom-thumbnail" v-show="!playerStates[1]?.hasStarted" @click="togglePlay(1)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/fec32e8d-d711-48a2-bd22-59581f0594c1.jpg" alt="Thumbnail" />
             </div>
-            <button class="video-center-play" type="button" v-show="!playerStates[1]?.isPlaying" @click="togglePlay(1)">▶</button>
+            <button class="video-center-play" type="button" v-show="!playerStates[1]?.isPlaying && !playerStates[1]?.isBuffering && (playerStates[1]?.isReady || !playerStates[1]?.hasStarted)" @click="togglePlay(1)">▶</button>
+            <div class="video-loading-overlay" v-show="playerStates[1]?.isBuffering || (playerStates[1]?.hasStarted && !playerStates[1]?.isReady)">
+              <div class="spinner"></div>
+            </div>
             <div class="video-controls" aria-label="Kontrol video 1">
               <button class="video-control-button video-play" type="button" @click="togglePlay(1)">{{ playerStates[1]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[1]?.progress || 0" @input="onSeekInput(1, $event)" aria-label="Posisi video">
@@ -1462,7 +1685,10 @@ hujan = <span class="code-keyword">True</span>
             <div class="custom-thumbnail" v-show="!playerStates[2]?.hasStarted" @click="togglePlay(2)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/2925ebc7-89c3-4010-a057-9807aacc6a32.jpg" alt="Thumbnail" />
             </div>
-            <button class="video-center-play" type="button" v-show="!playerStates[2]?.isPlaying" @click="togglePlay(2)">▶</button>
+            <button class="video-center-play" type="button" v-show="!playerStates[2]?.isPlaying && !playerStates[2]?.isBuffering && (playerStates[2]?.isReady || !playerStates[2]?.hasStarted)" @click="togglePlay(2)">▶</button>
+            <div class="video-loading-overlay" v-show="playerStates[2]?.isBuffering || (playerStates[2]?.hasStarted && !playerStates[2]?.isReady)">
+              <div class="spinner"></div>
+            </div>
             <div class="video-controls" aria-label="Kontrol video 2">
               <button class="video-control-button video-play" type="button" @click="togglePlay(2)">{{ playerStates[2]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[2]?.progress || 0" @input="onSeekInput(2, $event)" aria-label="Posisi video">
@@ -1573,7 +1799,10 @@ hujan = <span class="code-keyword">True</span>
             <div class="custom-thumbnail" v-show="!playerStates[3]?.hasStarted" @click="togglePlay(3)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/ec2aeaa6-e2e2-4e83-861e-223bfb9e1138.jpg" alt="Thumbnail" />
             </div>
-            <button class="video-center-play" type="button" v-show="!playerStates[3]?.isPlaying" @click="togglePlay(3)">▶</button>
+            <button class="video-center-play" type="button" v-show="!playerStates[3]?.isPlaying && !playerStates[3]?.isBuffering && (playerStates[3]?.isReady || !playerStates[3]?.hasStarted)" @click="togglePlay(3)">▶</button>
+            <div class="video-loading-overlay" v-show="playerStates[3]?.isBuffering || (playerStates[3]?.hasStarted && !playerStates[3]?.isReady)">
+              <div class="spinner"></div>
+            </div>
             <div class="video-controls" aria-label="Kontrol video 3">
               <button class="video-control-button video-play" type="button" @click="togglePlay(3)">{{ playerStates[3]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[3]?.progress || 0" @input="onSeekInput(3, $event)" aria-label="Posisi video">
@@ -1691,7 +1920,10 @@ task_done = <span class="code-keyword">True</span>
             <div class="custom-thumbnail" v-show="!playerStates[4]?.hasStarted" @click="togglePlay(4)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/47f3ef56-348b-4c3c-a767-aa4a40c5b833.jpg" alt="Thumbnail" />
             </div>
-            <button class="video-center-play" type="button" v-show="!playerStates[4]?.isPlaying" @click="togglePlay(4)">▶</button>
+            <button class="video-center-play" type="button" v-show="!playerStates[4]?.isPlaying && !playerStates[4]?.isBuffering && (playerStates[4]?.isReady || !playerStates[4]?.hasStarted)" @click="togglePlay(4)">▶</button>
+            <div class="video-loading-overlay" v-show="playerStates[4]?.isBuffering || (playerStates[4]?.hasStarted && !playerStates[4]?.isReady)">
+              <div class="spinner"></div>
+            </div>
             <div class="video-controls" aria-label="Kontrol video 4">
               <button class="video-control-button video-play" type="button" @click="togglePlay(4)">{{ playerStates[4]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[4]?.progress || 0" @input="onSeekInput(4, $event)" aria-label="Posisi video">
@@ -1791,7 +2023,10 @@ age = 16
             <div class="custom-thumbnail" v-show="!playerStates[5]?.hasStarted" @click="togglePlay(5)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/00c64b24-9e45-4a7e-8665-0817c04217c3.jpg" alt="Thumbnail" />
             </div>
-            <button class="video-center-play" type="button" v-show="!playerStates[5]?.isPlaying" @click="togglePlay(5)">▶</button>
+            <button class="video-center-play" type="button" v-show="!playerStates[5]?.isPlaying && !playerStates[5]?.isBuffering && (playerStates[5]?.isReady || !playerStates[5]?.hasStarted)" @click="togglePlay(5)">▶</button>
+            <div class="video-loading-overlay" v-show="playerStates[5]?.isBuffering || (playerStates[5]?.hasStarted && !playerStates[5]?.isReady)">
+              <div class="spinner"></div>
+            </div>
             <div class="video-controls" aria-label="Kontrol video 5">
               <button class="video-control-button video-play" type="button" @click="togglePlay(5)">{{ playerStates[5]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[5]?.progress || 0" @input="onSeekInput(5, $event)" aria-label="Posisi video">
@@ -1893,7 +2128,10 @@ remedial = <span class="code-keyword">False</span>
             <div class="custom-thumbnail" v-show="!playerStates[6]?.hasStarted" @click="togglePlay(6)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/c179c0a4-8817-4f1b-a9ef-cf6dcaa093c9.jpg" alt="Thumbnail" />
             </div>
-            <button class="video-center-play" type="button" v-show="!playerStates[6]?.isPlaying" @click="togglePlay(6)">▶</button>
+            <button class="video-center-play" type="button" v-show="!playerStates[6]?.isPlaying && !playerStates[6]?.isBuffering && (playerStates[6]?.isReady || !playerStates[6]?.hasStarted)" @click="togglePlay(6)">▶</button>
+            <div class="video-loading-overlay" v-show="playerStates[6]?.isBuffering || (playerStates[6]?.hasStarted && !playerStates[6]?.isReady)">
+              <div class="spinner"></div>
+            </div>
             <div class="video-controls" aria-label="Kontrol video 6">
               <button class="video-control-button video-play" type="button" @click="togglePlay(6)">{{ playerStates[6]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[6]?.progress || 0" @input="onSeekInput(6, $event)" aria-label="Posisi video">
@@ -2029,7 +2267,10 @@ remaining_money = total_money - total_budget
             <div class="custom-thumbnail" v-show="!playerStates[7]?.hasStarted" @click="togglePlay(7)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/98bcac2b-e88e-46d8-b1c1-deebd6a12c03.jpg" alt="Thumbnail" />
             </div>
-            <button class="video-center-play" type="button" v-show="!playerStates[7]?.isPlaying" @click="togglePlay(7)">▶</button>
+            <button class="video-center-play" type="button" v-show="!playerStates[7]?.isPlaying && !playerStates[7]?.isBuffering && (playerStates[7]?.isReady || !playerStates[7]?.hasStarted)" @click="togglePlay(7)">▶</button>
+            <div class="video-loading-overlay" v-show="playerStates[7]?.isBuffering || (playerStates[7]?.hasStarted && !playerStates[7]?.isReady)">
+              <div class="spinner"></div>
+            </div>
             <div class="video-controls" aria-label="Kontrol video 7">
               <button class="video-control-button video-play" type="button" @click="togglePlay(7)">{{ playerStates[7]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[7]?.progress || 0" @input="onSeekInput(7, $event)" aria-label="Posisi video">
@@ -2123,14 +2364,14 @@ risk_level = ""
         <div v-if="currentQuestion && currentQuestion.html" id="quizCustomHtml" v-html="currentQuestion.html"></div>
         <div v-show="currentQuestion && !currentQuestion.html" class="answer-row" id="answerRow">
           <button 
-            v-for="(choice, cIdx) in (currentQuestion ? currentQuestion.choices : [])" 
+            v-for="(choice, cIdx) in getQuestionChoices(currentQuestion)" 
             :key="cIdx" 
             class="answer-button"
             :class="{ 
               true: choice === 'TRUE' || choice === 'True',
               false: choice === 'FALSE' || choice === 'False'
             }"
-            @click="checkAnswer(choice)"
+            @click="handleStandardAnswer(choice)"
             :disabled="quizState.choicesDisabled"
             :style="{ opacity: quizState.choicesDisabled ? (quizState.selectedChoice === choice ? 1 : 0.5) : 1 }"
           >
