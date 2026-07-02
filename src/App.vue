@@ -1326,7 +1326,45 @@ const prevStep = () => {
   }
 };
 
+
+const isStepFinished = (stepId) => {
+  if (courseData[stepId]?.videoId) {
+    if (!videoWatchedStatus.value[stepId]) return false;
+  }
+  
+  const stepQuizzes = courseData[stepId]?.quizzes;
+  if (stepQuizzes && stepQuizzes.length > 0) {
+    for (let quiz of stepQuizzes) {
+      for (let q of quiz.questions) {
+        if (!q.qid) continue;
+        const ans = studentProgress.value[`${q.qid}_Ans`];
+        if (ans === undefined || ans === null || ans === '') return false;
+      }
+    }
+  }
+  return true;
+};
+
+const goToStep = (step) => {
+  if (step <= currentStep.value) {
+    currentStep.value = step;
+    return;
+  }
+  for (let i = 1; i < step; i++) {
+    if (!isStepFinished(i)) {
+      alert(`Mohon selesaikan video dan kuis/tugas di Modul ${i} terlebih dahulu.`);
+      return;
+    }
+  }
+  currentStep.value = step;
+};
+
 const nextStep = () => {
+  if (!isStepFinished(currentStep.value)) {
+    alert(`Mohon selesaikan video dan kuis/tugas di modul ini terlebih dahulu.`);
+    return;
+  }
+
   if (currentStep.value < totalSteps) {
     currentStep.value += 1;
     return;
@@ -1491,7 +1529,7 @@ const getStepConfig = (stepId) => {
         </nav>
 
         <nav class="lesson-nav" aria-label="Daftar video">
-          <button class="lesson-tab" :class="{ active: currentStep === 1 }" type="button" @click="currentStep = 1">
+          <button class="lesson-tab" :class="{ active: currentStep === 1 }" type="button" @click="goToStep(1)">
 
             <span class="tab-number">01</span>
             <span class="tab-copy">
@@ -1500,7 +1538,7 @@ const getStepConfig = (stepId) => {
             </span>
             <span class="tab-arrow" aria-hidden="true">›</span>
           </button>
-          <button class="lesson-tab" :class="{ active: currentStep === 2 }" type="button" @click="currentStep = 2">
+          <button class="lesson-tab" :class="{ active: currentStep === 2 }" type="button" @click="goToStep(2)">
 
             <span class="tab-number">02</span>
             <span class="tab-copy">
@@ -1509,7 +1547,7 @@ const getStepConfig = (stepId) => {
             </span>
             <span class="tab-arrow" aria-hidden="true">›</span>
           </button>
-          <button class="lesson-tab" :class="{ active: currentStep === 3 }" type="button" @click="currentStep = 3">
+          <button class="lesson-tab" :class="{ active: currentStep === 3 }" type="button" @click="goToStep(3)">
 
             <span class="tab-number">03</span>
             <span class="tab-copy">
@@ -1518,7 +1556,7 @@ const getStepConfig = (stepId) => {
             </span>
             <span class="tab-arrow" aria-hidden="true">›</span>
           </button>
-          <button class="lesson-tab" :class="{ active: currentStep === 4 }" type="button" @click="currentStep = 4">
+          <button class="lesson-tab" :class="{ active: currentStep === 4 }" type="button" @click="goToStep(4)">
 
             <span class="tab-number">04</span>
             <span class="tab-copy">
@@ -1527,7 +1565,7 @@ const getStepConfig = (stepId) => {
             </span>
             <span class="tab-arrow" aria-hidden="true">›</span>
           </button>
-          <button class="lesson-tab" :class="{ active: currentStep === 5 }" type="button" @click="currentStep = 5">
+          <button class="lesson-tab" :class="{ active: currentStep === 5 }" type="button" @click="goToStep(5)">
 
             <span class="tab-number">05</span>
             <span class="tab-copy">
@@ -1536,7 +1574,7 @@ const getStepConfig = (stepId) => {
             </span>
             <span class="tab-arrow" aria-hidden="true">›</span>
           </button>
-          <button class="lesson-tab" :class="{ active: currentStep === 6 }" type="button" @click="currentStep = 6">
+          <button class="lesson-tab" :class="{ active: currentStep === 6 }" type="button" @click="goToStep(6)">
 
             <span class="tab-number">06</span>
             <span class="tab-copy">
@@ -1545,7 +1583,7 @@ const getStepConfig = (stepId) => {
             </span>
             <span class="tab-arrow" aria-hidden="true">›</span>
           </button>
-          <button class="lesson-tab" :class="{ active: currentStep === 7 }" type="button" @click="currentStep = 7">
+          <button class="lesson-tab" :class="{ active: currentStep === 7 }" type="button" @click="goToStep(7)">
 
             <span class="tab-number">07</span>
             <span class="tab-copy">
@@ -2319,12 +2357,12 @@ risk_level = ""
           </details>
         </section>
 
-        <div class="navigation">
-          <button class="nav-button secondary" id="prevButton" type="button" disabled>
-            <span aria-hidden="true">←</span> Sebelumnya
+        <div class="nav-buttons">
+          <button class="nav-button secondary" type="button" :disabled="currentStep === 1" @click="prevStep()">
+            ← Modul Sebelumnya
           </button>
-          <button class="nav-button primary" id="nextButton" type="button" disabled>
-            Lanjut ke video 2 <span aria-hidden="true">→</span>
+          <button class="nav-button primary" type="button" :disabled="currentStep === 7" @click="nextStep()">
+            Modul Berikutnya →
           </button>
         </div>
       </section>
