@@ -477,6 +477,7 @@ export const courseData = {
         questions: [
           {
             continueOnly: true,
+            type: "info",
             html: `
               <h2 class="slide-title">Selesai Menonton! 🎉</h2>
               <div class="slide-text">
