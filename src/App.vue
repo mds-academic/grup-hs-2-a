@@ -290,6 +290,11 @@ const youtubeReady = ref(false);
 const players = {};
 const timeCheckers = {};
 
+
+const introRefs = ref({});
+const introPlayed = ref({});
+const introVideoSrc = import.meta.env.BASE_URL + 'intro.mp4';
+
 const playerStates = ref({
   1: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
   2: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
@@ -397,7 +402,45 @@ const getSeekValue = (stepId) => {
 };
 
 // Video actions
+const playIntroThenVideo = async (stepId) => {
+  const introEl = introRefs.value[stepId];
+  if (introEl && !introPlayed.value[stepId]) {
+    playerStates.value[stepId].introPlaying = true;
+    playerStates.value[stepId].hasStarted = true;
+    await nextTick();
+    introEl.currentTime = 0;
+    introEl.play().catch(e => {
+      console.error("Intro video play error:", e);
+      onIntroEnded(stepId);
+    });
+  } else {
+    console.warn("No introEl or already played for step", stepId);
+    onIntroEnded(stepId);
+  }
+};
+
+const onIntroEnded = (stepId) => {
+  playerStates.value[stepId].introPlaying = false;
+  introPlayed.value[stepId] = true;
+  
+  const player = players[stepId];
+  if (!player || typeof player.getPlayerState !== "function") {
+    initializeYouTubePlayer(stepId);
+    setTimeout(() => {
+      if (players[stepId] && typeof players[stepId].playVideo === 'function') {
+         players[stepId].playVideo();
+      }
+    }, 500);
+  } else {
+    player.playVideo();
+  }
+};
+
 const playVideo = (stepId) => {
+  if (!introPlayed.value[stepId]) {
+    playIntroThenVideo(stepId);
+    return;
+  }
   playerStates.value[stepId].hasStarted = true;
   const player = players[stepId];
   if (!player || typeof player.getPlayerState !== "function") {
@@ -414,6 +457,10 @@ const playVideo = (stepId) => {
   player.playVideo();
 };
 const togglePlay = (stepId) => {
+  if (!introPlayed.value[stepId]) {
+    playIntroThenVideo(stepId);
+    return;
+  }
   const player = players[stepId];
   if (!player || typeof player.getPlayerState !== "function") {
     initializeYouTubePlayer(stepId);
@@ -779,18 +826,26 @@ const registerFailedInputAttempt = (btn, feedbackEl) => {
 const handleStandardAnswer = (answer) => {
   const item = currentQuestion.value;
   if (!item) return;
+  if (quizState.value.choicesDisabled) return;
 
   const expectedAnswer = item.answer ?? item.correct;
   const normalizedAnswer = typeof answer === "string" ? answer.trim().toLowerCase() : answer;
   const normalizedExpected = typeof expectedAnswer === "string" ? expectedAnswer.trim().toLowerCase() : expectedAnswer;
   const isCorrect = normalizedAnswer === normalizedExpected;
-  quizState.value.selectedChoice = answer;
-  quizState.value.choicesDisabled = true;
-
-  quizState.value.quizFeedbackType = isCorrect ? 'correct' : 'wrong';
-  quizState.value.quizFeedback = (isCorrect ? "Tepat. " : "Belum tepat. ") + item.explanation;
   
-  revealQuizNext();
+  quizState.value.selectedChoice = answer;
+
+  if (isCorrect) {
+    quizState.value.choicesDisabled = true;
+    quizState.value.quizFeedbackType = 'correct';
+    quizState.value.quizFeedback = "Tepat. " + (item.explanation || "");
+    revealQuizNext();
+  } else {
+    quizState.value.choicesDisabled = true;
+    quizState.value.quizFeedbackType = 'wrong';
+    quizState.value.quizFeedback = "Belum tepat. " + (item.explanation || "");
+    revealQuizNext("Lanjut dulu →");
+  }
 };
 
 const goToNextQuestion = () => {
@@ -964,7 +1019,7 @@ const exposeGlobalMethods = () => {
       feedback.innerHTML = `❌ <strong>SALAH!</strong><br>${explanation}`;
       feedback.style.backgroundColor = "#ff5c8a";
       feedback.style.color = "white";
-      registerFailedInputAttempt(btn, feedback);
+      revealQuizNext("Lanjut dulu →");
     }
   };
 
@@ -1523,7 +1578,7 @@ const getStepConfig = (stepId) => {
               <option :value="4">04 Nested Conditionals</option>
               <option :value="5">05 Logical Operator</option>
               <option :value="6">06 Financial Literacy</option>
-              <option :value="7">07 Mandatory Assignment</option>
+              <option :value="7">07 Mini Project</option>
             </select>
           </div>
         </nav>
@@ -1587,7 +1642,7 @@ const getStepConfig = (stepId) => {
 
             <span class="tab-number">07</span>
             <span class="tab-copy">
-              <strong>Mandatory Assignment</strong>
+              <strong>Mini Project</strong>
               <span>Smart Budget & Risk Planner</span>
             </span>
             <span class="tab-arrow" aria-hidden="true">›</span>
@@ -1611,6 +1666,14 @@ const getStepConfig = (stepId) => {
 
         <section class="step-panel" id="step-1" v-show="currentStep === 1">
           <div class="video-frame" :class="{ 'player-ready': playerStates[1]?.isReady }" data-video-step="1">
+            <video 
+              v-show="playerStates[1]?.introPlaying"
+              :ref="(el) => { if (el) introRefs[1] = el; }"
+              :src="introVideoSrc"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; background: black;"
+              @ended="onIntroEnded(1)"
+              playsinline
+            ></video>
             <div id="youtube-player-1"></div>
             <div class="custom-thumbnail" v-show="!playerStates[1]?.hasStarted" @click="togglePlay(1)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/fec32e8d-d711-48a2-bd22-59581f0594c1.jpg" alt="Thumbnail" />
@@ -1619,7 +1682,7 @@ const getStepConfig = (stepId) => {
             <div class="video-loading-overlay" v-show="playerStates[1]?.isBuffering || (playerStates[1]?.hasStarted && !playerStates[1]?.isReady)">
               <div class="spinner"></div>
             </div>
-            <div class="video-controls" aria-label="Kontrol video 1">
+            <div class="video-controls" aria-label="Kontrol video 1" v-show="!playerStates[1]?.introPlaying">
               <button class="video-control-button video-play" type="button" @click="togglePlay(1)">{{ playerStates[1]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[1]?.progress || 0" @input="onSeekInput(1, $event)" aria-label="Posisi video">
               <span class="video-time">{{ playerStates[1]?.currentTimeFormatted || "0:00" }} / {{ playerStates[1]?.durationFormatted || "0:00" }}</span>
@@ -1719,6 +1782,14 @@ hujan = <span class="code-keyword">True</span>
 
         <section class="step-panel" id="step-2" v-show="currentStep === 2">
           <div class="video-frame" :class="{ 'player-ready': playerStates[2]?.isReady }" data-video-step="2">
+            <video 
+              v-show="playerStates[2]?.introPlaying"
+              :ref="(el) => { if (el) introRefs[2] = el; }"
+              :src="introVideoSrc"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; background: black;"
+              @ended="onIntroEnded(2)"
+              playsinline
+            ></video>
             <div id="youtube-player-2"></div>
             <div class="custom-thumbnail" v-show="!playerStates[2]?.hasStarted" @click="togglePlay(2)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/2925ebc7-89c3-4010-a057-9807aacc6a32.jpg" alt="Thumbnail" />
@@ -1727,7 +1798,7 @@ hujan = <span class="code-keyword">True</span>
             <div class="video-loading-overlay" v-show="playerStates[2]?.isBuffering || (playerStates[2]?.hasStarted && !playerStates[2]?.isReady)">
               <div class="spinner"></div>
             </div>
-            <div class="video-controls" aria-label="Kontrol video 2">
+            <div class="video-controls" aria-label="Kontrol video 2" v-show="!playerStates[2]?.introPlaying">
               <button class="video-control-button video-play" type="button" @click="togglePlay(2)">{{ playerStates[2]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[2]?.progress || 0" @input="onSeekInput(2, $event)" aria-label="Posisi video">
               <span class="video-time">{{ playerStates[2]?.currentTimeFormatted || "0:00" }} / {{ playerStates[2]?.durationFormatted || "0:00" }}</span>
@@ -1833,6 +1904,14 @@ hujan = <span class="code-keyword">True</span>
 
         <section class="step-panel" id="step-3" v-show="currentStep === 3">
           <div class="video-frame" :class="{ 'player-ready': playerStates[3]?.isReady }" data-video-step="3">
+            <video 
+              v-show="playerStates[3]?.introPlaying"
+              :ref="(el) => { if (el) introRefs[3] = el; }"
+              :src="introVideoSrc"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; background: black;"
+              @ended="onIntroEnded(3)"
+              playsinline
+            ></video>
             <div id="youtube-player-3"></div>
             <div class="custom-thumbnail" v-show="!playerStates[3]?.hasStarted" @click="togglePlay(3)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/ec2aeaa6-e2e2-4e83-861e-223bfb9e1138.jpg" alt="Thumbnail" />
@@ -1841,7 +1920,7 @@ hujan = <span class="code-keyword">True</span>
             <div class="video-loading-overlay" v-show="playerStates[3]?.isBuffering || (playerStates[3]?.hasStarted && !playerStates[3]?.isReady)">
               <div class="spinner"></div>
             </div>
-            <div class="video-controls" aria-label="Kontrol video 3">
+            <div class="video-controls" aria-label="Kontrol video 3" v-show="!playerStates[3]?.introPlaying">
               <button class="video-control-button video-play" type="button" @click="togglePlay(3)">{{ playerStates[3]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[3]?.progress || 0" @input="onSeekInput(3, $event)" aria-label="Posisi video">
               <span class="video-time">{{ playerStates[3]?.currentTimeFormatted || "0:00" }} / {{ playerStates[3]?.durationFormatted || "0:00" }}</span>
@@ -1954,6 +2033,14 @@ task_done = <span class="code-keyword">True</span>
 
         <section class="step-panel" id="step-4" v-show="currentStep === 4">
           <div class="video-frame" :class="{ 'player-ready': playerStates[4]?.isReady }" data-video-step="4">
+            <video 
+              v-show="playerStates[4]?.introPlaying"
+              :ref="(el) => { if (el) introRefs[4] = el; }"
+              :src="introVideoSrc"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; background: black;"
+              @ended="onIntroEnded(4)"
+              playsinline
+            ></video>
             <div id="youtube-player-4"></div>
             <div class="custom-thumbnail" v-show="!playerStates[4]?.hasStarted" @click="togglePlay(4)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/47f3ef56-348b-4c3c-a767-aa4a40c5b833.jpg" alt="Thumbnail" />
@@ -1962,7 +2049,7 @@ task_done = <span class="code-keyword">True</span>
             <div class="video-loading-overlay" v-show="playerStates[4]?.isBuffering || (playerStates[4]?.hasStarted && !playerStates[4]?.isReady)">
               <div class="spinner"></div>
             </div>
-            <div class="video-controls" aria-label="Kontrol video 4">
+            <div class="video-controls" aria-label="Kontrol video 4" v-show="!playerStates[4]?.introPlaying">
               <button class="video-control-button video-play" type="button" @click="togglePlay(4)">{{ playerStates[4]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[4]?.progress || 0" @input="onSeekInput(4, $event)" aria-label="Posisi video">
               <span class="video-time">{{ playerStates[4]?.currentTimeFormatted || "0:00" }} / {{ playerStates[4]?.durationFormatted || "0:00" }}</span>
@@ -2057,6 +2144,14 @@ age = 16
 
         <section class="step-panel" id="step-5" v-show="currentStep === 5">
           <div class="video-frame" :class="{ 'player-ready': playerStates[5]?.isReady }" data-video-step="5">
+            <video 
+              v-show="playerStates[5]?.introPlaying"
+              :ref="(el) => { if (el) introRefs[5] = el; }"
+              :src="introVideoSrc"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; background: black;"
+              @ended="onIntroEnded(5)"
+              playsinline
+            ></video>
             <div id="youtube-player-5"></div>
             <div class="custom-thumbnail" v-show="!playerStates[5]?.hasStarted" @click="togglePlay(5)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/00c64b24-9e45-4a7e-8665-0817c04217c3.jpg" alt="Thumbnail" />
@@ -2065,7 +2160,7 @@ age = 16
             <div class="video-loading-overlay" v-show="playerStates[5]?.isBuffering || (playerStates[5]?.hasStarted && !playerStates[5]?.isReady)">
               <div class="spinner"></div>
             </div>
-            <div class="video-controls" aria-label="Kontrol video 5">
+            <div class="video-controls" aria-label="Kontrol video 5" v-show="!playerStates[5]?.introPlaying">
               <button class="video-control-button video-play" type="button" @click="togglePlay(5)">{{ playerStates[5]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[5]?.progress || 0" @input="onSeekInput(5, $event)" aria-label="Posisi video">
               <span class="video-time">{{ playerStates[5]?.currentTimeFormatted || "0:00" }} / {{ playerStates[5]?.durationFormatted || "0:00" }}</span>
@@ -2162,6 +2257,14 @@ remedial = <span class="code-keyword">False</span>
 
         <section class="step-panel" id="step-6" v-show="currentStep === 6">
           <div class="video-frame" :class="{ 'player-ready': playerStates[6]?.isReady }" data-video-step="6">
+            <video 
+              v-show="playerStates[6]?.introPlaying"
+              :ref="(el) => { if (el) introRefs[6] = el; }"
+              :src="introVideoSrc"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; background: black;"
+              @ended="onIntroEnded(6)"
+              playsinline
+            ></video>
             <div id="youtube-player-6"></div>
             <div class="custom-thumbnail" v-show="!playerStates[6]?.hasStarted" @click="togglePlay(6)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/c179c0a4-8817-4f1b-a9ef-cf6dcaa093c9.jpg" alt="Thumbnail" />
@@ -2170,7 +2273,7 @@ remedial = <span class="code-keyword">False</span>
             <div class="video-loading-overlay" v-show="playerStates[6]?.isBuffering || (playerStates[6]?.hasStarted && !playerStates[6]?.isReady)">
               <div class="spinner"></div>
             </div>
-            <div class="video-controls" aria-label="Kontrol video 6">
+            <div class="video-controls" aria-label="Kontrol video 6" v-show="!playerStates[6]?.introPlaying">
               <button class="video-control-button video-play" type="button" @click="togglePlay(6)">{{ playerStates[6]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[6]?.progress || 0" @input="onSeekInput(6, $event)" aria-label="Posisi video">
               <span class="video-time">{{ playerStates[6]?.currentTimeFormatted || "0:00" }} / {{ playerStates[6]?.durationFormatted || "0:00" }}</span>
@@ -2301,6 +2404,14 @@ remaining_money = total_money - total_budget
 
         <section class="step-panel" id="step-7" v-show="currentStep === 7">
           <div class="video-frame" :class="{ 'player-ready': playerStates[7]?.isReady }" data-video-step="7">
+            <video 
+              v-show="playerStates[7]?.introPlaying"
+              :ref="(el) => { if (el) introRefs[7] = el; }"
+              :src="introVideoSrc"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; background: black;"
+              @ended="onIntroEnded(7)"
+              playsinline
+            ></video>
             <div id="youtube-player-7"></div>
             <div class="custom-thumbnail" v-show="!playerStates[7]?.hasStarted" @click="togglePlay(7)">
               <img src="https://cdn-web-2.ruangguru.com/landing-pages/assets/98bcac2b-e88e-46d8-b1c1-deebd6a12c03.jpg" alt="Thumbnail" />
@@ -2309,7 +2420,7 @@ remaining_money = total_money - total_budget
             <div class="video-loading-overlay" v-show="playerStates[7]?.isBuffering || (playerStates[7]?.hasStarted && !playerStates[7]?.isReady)">
               <div class="spinner"></div>
             </div>
-            <div class="video-controls" aria-label="Kontrol video 7">
+            <div class="video-controls" aria-label="Kontrol video 7" v-show="!playerStates[7]?.introPlaying">
               <button class="video-control-button video-play" type="button" @click="togglePlay(7)">{{ playerStates[7]?.isPlaying ? "⏸" : "▶" }}</button>
               <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[7]?.progress || 0" @input="onSeekInput(7, $event)" aria-label="Posisi video">
               <span class="video-time">{{ playerStates[7]?.currentTimeFormatted || "0:00" }} / {{ playerStates[7]?.durationFormatted || "0:00" }}</span>

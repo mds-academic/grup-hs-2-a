@@ -491,7 +491,7 @@ export const courseData = {
     ]
   },
   7: {
-    kicker: "Mandatory Assignment",
+    kicker: "Mini Project",
     title: "Smart Budget & Risk Planner",
     duration: "Tugas Akhir Misi Conditional",
     videoId: "bMsKBaRsKmc",
