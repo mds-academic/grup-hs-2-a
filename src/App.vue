@@ -575,8 +575,14 @@ const handlePlayerStateChange = (stepId, event) => {
 
   if (event.data === window.YT.PlayerState.ENDED) {
     videoWatchedStatus.value[stepId] = true;
-    if (checkVideoQuizzes(stepId)) return;
-    restartVideoFromBoundary(stepId);
+    checkVideoQuizzes(stepId);
+    
+    restartVideoFromBoundary(stepId, false);
+    
+    introPlayed.value[stepId] = false;
+    playerStates.value[stepId].hasStarted = false;
+    playerStates.value[stepId].isPlaying = false;
+    
     return;
   }
 
@@ -1401,25 +1407,10 @@ const isStepFinished = (stepId) => {
 };
 
 const goToStep = (step) => {
-  if (step <= currentStep.value) {
-    currentStep.value = step;
-    return;
-  }
-  for (let i = 1; i < step; i++) {
-    if (!isStepFinished(i)) {
-      alert(`Mohon selesaikan video dan kuis/tugas di Modul ${i} terlebih dahulu.`);
-      return;
-    }
-  }
   currentStep.value = step;
 };
 
 const nextStep = () => {
-  if (!isStepFinished(currentStep.value)) {
-    alert(`Mohon selesaikan video dan kuis/tugas di modul ini terlebih dahulu.`);
-    return;
-  }
-
   if (currentStep.value < totalSteps) {
     currentStep.value += 1;
     return;
