@@ -418,6 +418,9 @@ const updateVideoControls = (stepId) => {
   playerStates.value[stepId].progress = getSeekValue(stepId);
   playerStates.value[stepId].durationFormatted = formatVideoTime(duration);
   playerStates.value[stepId].currentTimeFormatted = formatVideoTime(playerStates.value[stepId].currentTime);
+  if (playerStates.value[stepId].progress >= 95) {
+    videoWatchedStatus.value[stepId] = true;
+  }
 };
 
 const getSeekMin = (stepId) => {
