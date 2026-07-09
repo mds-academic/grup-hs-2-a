@@ -2598,7 +2598,7 @@ risk_level = ""
           {{ currentQuestion ? currentQuestion.question : 'Memuat pertanyaan...' }}
         </div>
         <div v-if="currentQuestion && currentQuestion.html" id="quizCustomHtml" v-html="currentQuestion.html"></div>
-        <div v-show="currentQuestion && !currentQuestion.html" class="answer-row" id="answerRow">
+        <div v-show="currentQuestion && getQuestionChoices(currentQuestion).length > 0" class="answer-row" id="answerRow">
           <button 
             v-for="(choice, cIdx) in getQuestionChoices(currentQuestion)" 
             :key="cIdx" 
