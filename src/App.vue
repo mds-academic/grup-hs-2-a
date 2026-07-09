@@ -850,7 +850,8 @@ const registerFailedInputAttempt = (btn, feedbackEl) => {
   if (attempts >= 3) {
     attemptStatus.classList.add("limit-reached");
     markQuestionFailed(currentQuestion.value?.qid);
-    attemptStatus.innerHTML = "<strong>Sudah 3 kali mencoba.</strong><br>Modul berikutnya tetap terkunci. Silakan ulangi bagian video ini untuk mencoba lagi.";
+    attemptStatus.innerHTML = "<strong>Sudah 3 kali mencoba.</strong><br>Kamu boleh lanjut dulu. Perhatikan lagi videonya sebelum masuk ke bagian berikutnya, ya.";
+    revealQuizNext("Lanjut →");
     btn.disabled = true;
     btn.style.opacity = "0.55";
   } else {
@@ -896,7 +897,8 @@ const handleStandardAnswer = (answer) => {
     if (attempts >= 3) {
       quizState.value.choicesDisabled = true;
       markQuestionFailed(item.qid);
-      quizState.value.quizFeedback = "Sudah 3 kali mencoba. Modul berikutnya tetap terkunci. Silakan ulangi bagian video ini untuk mencoba lagi.";
+      quizState.value.quizFeedback = "<strong>Sudah 3 kali mencoba.</strong><br>Kamu boleh lanjut dulu. Perhatikan lagi videonya sebelum masuk ke bagian berikutnya, ya.";
+      revealQuizNext("Lanjut →");
     } else {
       quizState.value.choicesDisabled = false;
       quizState.value.quizFeedback = `Belum tepat. ${(item.explanation || "")} (Percobaan ${attempts}/3)`;
@@ -1087,7 +1089,8 @@ const exposeGlobalMethods = () => {
       const attempts = qid ? studentProgress.value[`${qid}_Att`] || 1 : 1;
       if (attempts >= 3) {
         markQuestionFailed(qid);
-        feedback.innerHTML += `<br><strong>Sudah 3 kali mencoba.</strong> Modul berikutnya tetap terkunci. Silakan ulangi bagian video ini untuk mencoba lagi.`;
+        feedback.innerHTML += `<br><strong>Sudah 3 kali mencoba.</strong> Kamu boleh lanjut dulu. Perhatikan lagi videonya sebelum masuk ke bagian berikutnya, ya.`;
+        revealQuizNext("Lanjut →");
       } else {
         buttons.forEach(b => {
           b.disabled = false;
