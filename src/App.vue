@@ -114,6 +114,7 @@ const studentData = ref({ name: '', school: '', email: '' });
 const studentProgress = ref({}); // Menyimpan progress jawaban & attempts
 
 const buildSheetsPayload = () => ({
+  Group: 'ghs2a',
   Students_Email: studentData.value.email,
   Students_Name: studentData.value.name,
   Students_School: studentData.value.school,
