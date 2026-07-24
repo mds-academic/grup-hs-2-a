@@ -793,6 +793,7 @@ const initializeYouTubePlayer = (stepId) => {
           playerStates.value[normalizedStepId].hasStarted = true;
         }
         updateVideoControls(normalizedStepId);
+        checkVideoQuizzes(normalizedStepId);
       },
       onError: () => {
         playerStates.value[normalizedStepId].isError = true;
@@ -829,13 +830,14 @@ const handlePlayerStateChange = (stepId, event) => {
       tab: Number(stepId),
       tabBerikutnya: Number(stepId) < totalSteps ? Number(stepId) + 1 : null
     });
-    checkVideoQuizzes(stepId);
+    const quizOpened = checkVideoQuizzes(stepId);
     
-    restartVideoFromBoundary(stepId, false);
-    
-    introPlayed.value[stepId] = false;
-    playerStates.value[stepId].hasStarted = false;
-    playerStates.value[stepId].isPlaying = false;
+    if (!quizOpened) {
+      restartVideoFromBoundary(stepId, false);
+      introPlayed.value[stepId] = false;
+      playerStates.value[stepId].hasStarted = false;
+      playerStates.value[stepId].isPlaying = false;
+    }
     
     return;
   }
@@ -853,11 +855,14 @@ const handlePlayerStateChange = (stepId, event) => {
 
 const checkVideoQuizzes = (stepId) => {
   const player = players[stepId];
-  if (!player || typeof player.getCurrentTime !== 'function') return;
+  const currentTime = player && typeof player.getCurrentTime === 'function' ? player.getCurrentTime() : 0;
+  const isEnded = Boolean(
+    videoWatchedStatus.value[stepId] ||
+    (player && typeof player.getPlayerState === 'function' && player.getPlayerState() === window.YT.PlayerState.ENDED)
+  );
 
-  const currentTime = player.getCurrentTime();
   const stepConfig = courseData[stepId];
-  if (!stepConfig || !stepConfig.quizzes) return;
+  if (!stepConfig || !stepConfig.quizzes) return false;
 
   for (let quiz of stepConfig.quizzes) {
     if (quizState.value.replayingQuizVideo && quiz === quizState.value.activeQuizConfig) {
@@ -867,10 +872,12 @@ const checkVideoQuizzes = (stepId) => {
       if (!quizState.value.replayCheckpointArmed) continue;
     }
 
-    if (!quiz.shown && currentTime >= quiz.time) {
+    if (!quiz.shown && (currentTime >= quiz.time || isEnded)) {
       quiz.shown = true;
       persistLearningState({ force: true });
-      player.pauseVideo();
+      if (player && typeof player.pauseVideo === 'function') {
+        player.pauseVideo();
+      }
       window.clearInterval(timeCheckers[stepId]);
 
       const shouldResume = quiz.resume !== undefined ? quiz.resume : true;
@@ -946,17 +953,20 @@ const openQuiz = (questionsArray, shouldResume = false, seekTime = null, quizCon
 const closeQuiz = (resumeVideo = false, seekTime = null) => {
   const stepId = currentStep.value;
   const player = players[stepId];
-  if (player && typeof player.getCurrentTime === 'function') {
-    const currentTime = player.getCurrentTime();
-    const stepConfig = courseData[stepId];
-    if (stepConfig && stepConfig.quizzes) {
-      const nextQuiz = stepConfig.quizzes.find(q => !q.shown && currentTime >= q.time);
-      if (nextQuiz) {
-        nextQuiz.shown = true;
-        const shouldResume = nextQuiz.resume !== undefined ? nextQuiz.resume : true;
-        openQuiz(nextQuiz.questions, shouldResume, nextQuiz.resumeTime, nextQuiz, stepId);
-        return;
-      }
+  const currentTime = (player && typeof player.getCurrentTime === 'function') ? player.getCurrentTime() : 0;
+  const isEnded = Boolean(
+    videoWatchedStatus.value[stepId] ||
+    (player && typeof player.getPlayerState === 'function' && player.getPlayerState() === window.YT.PlayerState.ENDED)
+  );
+
+  const stepConfig = courseData[stepId];
+  if (stepConfig && stepConfig.quizzes) {
+    const nextQuiz = stepConfig.quizzes.find(q => !q.shown && (currentTime >= q.time || isEnded));
+    if (nextQuiz) {
+      nextQuiz.shown = true;
+      const shouldResume = nextQuiz.resume !== undefined ? nextQuiz.resume : true;
+      openQuiz(nextQuiz.questions, shouldResume, nextQuiz.resumeTime, nextQuiz, stepId);
+      return;
     }
   }
 
@@ -967,13 +977,20 @@ const closeQuiz = (resumeVideo = false, seekTime = null) => {
   if (!resumeVideo) {
     videoWatchedStatus.value[stepId] = true;
   }
-  if (resumeVideo && players[currentStep.value]) {
-    const player = players[currentStep.value];
-    if (seekTime !== null && typeof player.seekTo === "function") {
-      player.seekTo(seekTime, true);
+  if (isEnded && !stepConfig?.quizzes?.some(q => !q.shown)) {
+    restartVideoFromBoundary(stepId, false);
+    introPlayed.value[stepId] = false;
+    if (playerStates.value[stepId]) {
+      playerStates.value[stepId].hasStarted = false;
+      playerStates.value[stepId].isPlaying = false;
     }
-    if (typeof player.playVideo === "function") {
-      player.playVideo();
+  } else if (resumeVideo && players[currentStep.value]) {
+    const p = players[currentStep.value];
+    if (seekTime !== null && typeof p.seekTo === "function") {
+      p.seekTo(seekTime, true);
+    }
+    if (typeof p.playVideo === "function") {
+      p.playVideo();
     }
   }
 };
@@ -1749,10 +1766,15 @@ watch(currentStep, (newStep) => {
 });
 
 const openQuizButtonHandler = () => {
-  if (players[currentStep.value] && typeof players[currentStep.value].pauseVideo === "function") {
-    players[currentStep.value].pauseVideo();
+  const stepId = currentStep.value;
+  if (players[stepId] && typeof players[stepId].pauseVideo === "function") {
+    players[stepId].pauseVideo();
   }
-  openQuiz(courseData[2].quizzes[0].questions, false);
+  const quizzes = courseData[stepId]?.quizzes || [];
+  const targetQuiz = quizzes.find(q => !isQuizCompleted(q)) || quizzes[0];
+  if (targetQuiz) {
+    openQuiz(targetQuiz.questions, false, null, targetQuiz, stepId);
+  }
 };
 
 const getStepQuizProgress = (stepId) => {
