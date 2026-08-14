@@ -69,19 +69,21 @@ const dashboardNotice = reactive({
   title: '',
   message: '',
   actionLabel: 'Mengerti',
-  actionStep: null
+  actionStep: null,
+  actionMode: 'step'
 });
 const dashboardNoticeIcon = computed(() => ({
   success: 'OK',
   warning: '!',
   error: '!'
 })[dashboardNotice.type] || '!');
-const showDashboardNotice = ({ type = 'warning', title = 'Perhatian', message = '', actionLabel = 'Mengerti', actionStep = null } = {}) => {
+const showDashboardNotice = ({ type = 'warning', title = 'Perhatian', message = '', actionLabel = 'Mengerti', actionStep = null, actionMode = 'step' } = {}) => {
   dashboardNotice.type = type;
   dashboardNotice.title = title;
   dashboardNotice.message = message;
   dashboardNotice.actionLabel = actionLabel;
   dashboardNotice.actionStep = actionStep;
+  dashboardNotice.actionMode = actionMode;
   dashboardNotice.isOpen = true;
 };
 const closeDashboardNotice = () => {
@@ -91,7 +93,13 @@ const handleDashboardNoticeAction = () => {
   if (dashboardNotice.actionStep) {
     currentStep.value = dashboardNotice.actionStep;
   }
+  const shouldOpenQuiz = dashboardNotice.actionMode === 'quiz';
   closeDashboardNotice();
+  if (shouldOpenQuiz) {
+    nextTick(() => {
+      openQuizButtonHandler();
+    });
+  }
 };
 const schoolOptions = ref([]);
 const isSchoolLoading = ref(false);
@@ -1773,6 +1781,8 @@ const openQuizButtonHandler = () => {
   const quizzes = courseData[stepId]?.quizzes || [];
   const targetQuiz = quizzes.find(q => !isQuizCompleted(q)) || quizzes[0];
   if (targetQuiz) {
+    targetQuiz.shown = true;
+    persistLearningState({ force: true });
     openQuiz(targetQuiz.questions, false, null, targetQuiz, stepId);
   }
 };
@@ -1798,7 +1808,7 @@ const getStepQuizProgress = (stepId) => {
   const sessionCompletedCount = requiredQuizzes.filter(item => item.isCompleted && item.hasOpenedThisSession).length;
   const openedCount = requiredQuizzes.filter(item => item.hasOpenedThisSession).length;
   const activeQuizIndex = requiredQuizzes.findIndex(item => item.isActive) + 1;
-  const displayCompletedCount = sessionCompletedCount;
+  const displayCompletedCount = recordedCompletedCount;
 
   return { requiredQuizzes, total, recordedCompletedCount, displayCompletedCount, openedCount, activeQuizIndex };
 };
@@ -1845,13 +1855,17 @@ const getStepBlockingNotice = (stepId, targetStep = null) => {
   const progressText = quizProgress.total > 0
     ? `\n\nProgress kamu: ${quizProgress.displayCompletedCount} dari ${quizProgress.total} checkpoint selesai.`
     : '';
+  const canRecoverQuiz = quizProgress.total > 0 && checkpointIncomplete && (!stepConfig.videoId || videoWatchedStatus.value[stepId]);
 
   return {
     type: 'warning',
     title: `${moduleLabel} belum selesai`,
-    message: `Kamu sudah mulai belajar, tapi ${statusText}.\n\nSelesaikan dulu video sampai akhir, lalu kerjakan quiz/checkpoint. Setelah semua checkpoint lengkap, ${destinationLabel} akan terbuka otomatis.${progressText}`,
-    actionLabel: `Lanjutkan ${moduleLabel}`,
-    actionStep: Number(stepId)
+    message: canRecoverQuiz
+      ? `Kamu sudah mulai belajar, tapi ${statusText}.\n\nKalau quiz/checkpoint tidak muncul otomatis di HP, tekan tombol di bawah untuk membuka checkpoint yang belum selesai.${progressText}`
+      : `Kamu sudah mulai belajar, tapi ${statusText}.\n\nSelesaikan dulu video sampai akhir, lalu kerjakan quiz/checkpoint. Setelah semua checkpoint lengkap, ${destinationLabel} akan terbuka otomatis.${progressText}`,
+    actionLabel: canRecoverQuiz ? 'Buka checkpoint' : `Lanjutkan ${moduleLabel}`,
+    actionStep: Number(stepId),
+    actionMode: canRecoverQuiz ? 'quiz' : 'step'
   };
 };
 
