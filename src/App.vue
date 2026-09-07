@@ -51,7 +51,8 @@ const quizModalStyles = ref({ transform: 'translateY(50px) scale(0.95)', opacity
 
 
 // Reactive App States
-const currentStep = ref(1);
+const currentStep = ref(0);
+const maxStep = computed(() => Math.max(...Object.keys(courseData).map(Number)));
 const totalSteps = Object.keys(courseData).length;
 const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz58EffczfpcNL0bvbD6VZvrY3mrVNtmpWasSwJT0baOowD2yGu_KNM0YNul9EtxxKVpg/exec';
 const LEARNING_STATE_STORAGE_KEY = 'mds_ghs2a_learning_state';
@@ -376,7 +377,7 @@ onMounted(() => {
 });
 
 const videoWatchedStatus = ref({
-  1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 7: false
+  0: false, 1: false, 2: false, 3: false, 4: false, 5: false, 6: false, 7: false
 });
 
 const youtubeReady = ref(false);
@@ -389,6 +390,7 @@ const introPlayed = ref({});
 const introVideoSrc = import.meta.env.BASE_URL + 'intro.mp4';
 
 const playerStates = ref({
+  0: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
   1: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
   2: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
   3: { isPlaying: false, currentTime: 0, duration: 0, isMuted: false, isReady: false, isError: false, hasStarted: false, isBuffering: false },
@@ -500,7 +502,7 @@ const restoreLearningState = () => {
     if (!savedState || typeof savedState !== 'object') return;
 
     const restoredStep = Number(savedState.currentStep);
-    if (courseData[restoredStep]) {
+    if (courseData[restoredStep] !== undefined) {
       currentStep.value = restoredStep;
     }
 
@@ -623,7 +625,13 @@ const updateVideoControls = (stepId) => {
   playerStates.value[stepId].progress = getSeekValue(stepId);
   playerStates.value[stepId].durationFormatted = formatVideoTime(duration);
   playerStates.value[stepId].currentTimeFormatted = formatVideoTime(playerStates.value[stepId].currentTime);
-  if (playerStates.value[stepId].progress >= 95 && !videoWatchedStatus.value[stepId]) {
+  
+  const thresholdTime = duration > 25 ? (duration - 20) : (duration * 0.95);
+  const isWatchedByThreshold = duration > 0 && currentTime >= thresholdTime;
+  const isWatchedByPercent = playerStates.value[stepId].progress >= 95;
+  const meetsWatchRequirement = (stepId === 0 || stepId === '0') ? isWatchedByThreshold : (isWatchedByThreshold || isWatchedByPercent);
+
+  if (meetsWatchRequirement && !videoWatchedStatus.value[stepId]) {
     videoWatchedStatus.value[stepId] = true;
     persistLearningState({ force: true });
   }
@@ -1824,9 +1832,9 @@ const isStepFinished = (stepId) => {
 
 const getStepBlockingNotice = (stepId, targetStep = null) => {
   const stepConfig = courseData[stepId] || {};
-  const moduleLabel = `Modul ${stepId}`;
+  const moduleLabel = (stepId === 0 || stepId === '0') ? 'Video 00' : `Modul ${stepId}`;
   const quizProgress = getStepQuizProgress(stepId);
-  const destinationLabel = targetStep ? `Modul ${targetStep}` : 'modul berikutnya';
+  const destinationLabel = targetStep !== null ? ((targetStep === 0 || targetStep === '0') ? 'Video 00' : `Modul ${targetStep}`) : 'modul berikutnya';
   const playerState = playerStates.value[stepId] || {};
   const videoStarted = Boolean(
     videoWatchedStatus.value[stepId] ||
@@ -1839,7 +1847,7 @@ const getStepBlockingNotice = (stepId, targetStep = null) => {
     return {
       type: 'warning',
       title: `Mulai ${moduleLabel} dulu ya!`,
-      message: `${destinationLabel} masih terkunci karena kamu belum mulai menonton video ${moduleLabel}.\n\nYuk mulai dari langkah pertama:\n\n1. Tonton video ${moduleLabel} sampai selesai.\n2. Setelah video selesai, kerjakan Quiz/Checkpoint ${moduleLabel}.\n3. Jika semua checkpoint sudah selesai, ${destinationLabel} akan terbuka otomatis.`,
+      message: `${destinationLabel} masih terkunci karena kamu belum mulai menonton video ${moduleLabel}.\n\nYuk mulai dari langkah pertama:\n\n1. Tonton video ${moduleLabel} sampai selesai (minimal hingga 20 detik sebelum selesai).\n2. Setelah video selesai, kerjakan Quiz/Checkpoint jika ada.\n3. Jika semua checkpoint sudah selesai, ${destinationLabel} akan terbuka otomatis.`,
       actionLabel: `Mulai ${moduleLabel}`,
       actionStep: Number(stepId)
     };
@@ -1848,9 +1856,9 @@ const getStepBlockingNotice = (stepId, targetStep = null) => {
   const videoIncomplete = stepConfig.videoId && !videoWatchedStatus.value[stepId];
   const checkpointIncomplete = quizProgress.total > 0 && quizProgress.displayCompletedCount < quizProgress.total;
   const statusText = videoIncomplete && checkpointIncomplete
-    ? `video ${moduleLabel} belum selesai ditonton dan quiz/checkpoint-nya belum lengkap`
+    ? `video ${moduleLabel} belum selesai ditonton (minimal hingga 20 detik sebelum video berakhir) dan checkpoint-nya belum lengkap`
     : videoIncomplete
-      ? `video ${moduleLabel} belum selesai ditonton`
+      ? ((stepId === 0 || stepId === '0') ? 'video orientasi ini belum selesai ditonton (wajib tonton sampai minimal 20 detik sebelum video berakhir)' : `video ${moduleLabel} belum selesai ditonton (minimal sampai 20 detik sebelum selesai)`)
       : `quiz/checkpoint ${moduleLabel} belum lengkap`;
   const progressText = quizProgress.total > 0
     ? `\n\nProgress kamu: ${quizProgress.displayCompletedCount} dari ${quizProgress.total} checkpoint selesai.`
@@ -1862,7 +1870,7 @@ const getStepBlockingNotice = (stepId, targetStep = null) => {
     title: `${moduleLabel} belum selesai`,
     message: canRecoverQuiz
       ? `Kamu sudah mulai belajar, tapi ${statusText}.\n\nKalau quiz/checkpoint tidak muncul otomatis di HP, tekan tombol di bawah untuk membuka checkpoint yang belum selesai.${progressText}`
-      : `Kamu sudah mulai belajar, tapi ${statusText}.\n\nSelesaikan dulu video sampai akhir, lalu kerjakan quiz/checkpoint. Setelah semua checkpoint lengkap, ${destinationLabel} akan terbuka otomatis.${progressText}`,
+      : `Kamu sudah mulai belajar, tapi ${statusText}.\n\nSelesaikan dulu video sampai akhir (minimal hingga 20 detik sebelum selesai), lalu kerjakan quiz/checkpoint. Setelah semua checkpoint lengkap, ${destinationLabel} akan terbuka otomatis.${progressText}`,
     actionLabel: canRecoverQuiz ? 'Buka checkpoint' : `Lanjutkan ${moduleLabel}`,
     actionStep: Number(stepId),
     actionMode: canRecoverQuiz ? 'quiz' : 'step'
@@ -1874,7 +1882,7 @@ const goToStep = (step) => {
     currentStep.value = step;
     return;
   }
-  for (let i = 1; i < step; i++) {
+  for (let i = 0; i < step; i++) {
     if (!isStepFinished(i)) {
       showDashboardNotice(getStepBlockingNotice(i, step));
       return;
@@ -1890,7 +1898,7 @@ const handleStepSelect = (event) => {
 };
 
 const prevStep = () => {
-  if (currentStep.value > 1) {
+  if (currentStep.value > 0) {
     currentStep.value--;
   }
 };
@@ -1900,7 +1908,7 @@ const nextStep = () => {
     showDashboardNotice(getStepBlockingNotice(currentStep.value, currentStep.value + 1));
     return;
   }
-  if (currentStep.value < Object.keys(courseData).length) {
+  if (currentStep.value < maxStep.value) {
     currentStep.value++;
   }
 };
@@ -2035,10 +2043,10 @@ const getStepConfig = (stepId) => {
         <div class="mission-progress" aria-label="Progres pembelajaran">
           <div class="progress-copy">
             <span>Progres misi</span>
-            <span id="progressText">{{ currentStep }} dari {{ totalSteps }}</span>
+            <span id="progressText">{{ currentStep }} dari {{ maxStep }}</span>
           </div>
           <div class="progress-track">
-            <div class="progress-fill" :style="{ width: (currentStep / totalSteps * 100) + '%' }"></div>
+            <div class="progress-fill" :style="{ width: (currentStep / maxStep * 100) + '%' }"></div>
           </div>
         </div>
 
@@ -2046,6 +2054,7 @@ const getStepConfig = (stepId) => {
           <label for="mobile-lesson-select">Pilih Modul</label>
           <div class="select-wrapper">
             <select id="mobile-lesson-select" :value="currentStep" @change="handleStepSelect">
+              <option :value="0">00 Introduction to Async Learning</option>
               <option :value="1">01 Kenalan dengan Conditional</option>
               <option :value="2">02 Conditional di Python</option>
               <option :value="3">03 Multi Branch Conditionals</option>
@@ -2058,6 +2067,14 @@ const getStepConfig = (stepId) => {
         </nav>
 
         <nav class="lesson-nav" aria-label="Daftar video">
+          <button class="lesson-tab" :class="{ active: currentStep === 0 }" type="button" @click="goToStep(0)">
+            <span class="tab-number">00</span>
+            <span class="tab-copy">
+              <strong>Introduction to Async Learning</strong>
+              <span>Orientasi Belajar Mandiri</span>
+            </span>
+            <span class="tab-arrow" aria-hidden="true">›</span>
+          </button>
           <button class="lesson-tab" :class="{ active: currentStep === 1 }" type="button" @click="goToStep(1)">
 
             <span class="tab-number">01</span>
@@ -2137,6 +2154,40 @@ const getStepConfig = (stepId) => {
           </div>
           <span class="duration-pill">{{ courseData[currentStep].duration }}</span>
         </div>
+
+        <section class="step-panel" id="step-0" v-show="currentStep === 0">
+          <div class="video-frame" :class="{ 'player-ready': playerStates[0]?.isReady }" data-video-step="0">
+            <video 
+              v-show="playerStates[0]?.introPlaying"
+              :ref="(el) => { if (el) introRefs[0] = el; }"
+              :src="introVideoSrc"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; z-index: 10; background: black;"
+              @ended="onIntroEnded(0)"
+              playsinline
+            ></video>
+            <div id="youtube-player-0"></div>
+            <div class="custom-thumbnail" v-show="!playerStates[0]?.hasStarted" @click="togglePlay(0)">
+              <img src="https://img.youtube.com/vi/yxmLOk5vcFg/hqdefault.jpg" alt="Thumbnail" />
+            </div>
+            <button class="video-center-play" type="button" v-show="!playerStates[0]?.isPlaying && !playerStates[0]?.isBuffering && (playerStates[0]?.isReady || !playerStates[0]?.hasStarted)" @click="togglePlay(0)">▶</button>
+            <div class="video-loading-overlay" v-show="playerStates[0]?.isBuffering || (playerStates[0]?.hasStarted && !playerStates[0]?.isReady)">
+              <div class="spinner"></div>
+            </div>
+            <div class="video-controls" aria-label="Kontrol video 0" v-show="!playerStates[0]?.introPlaying">
+              <button class="video-control-button video-play" type="button" @click="togglePlay(0)">{{ playerStates[0]?.isPlaying ? "⏸" : "▶" }}</button>
+              <input class="video-seek" type="range" min="0" max="100" step="0.1" :value="playerStates[0]?.progress || 0" @input="onSeekInput(0, $event)" aria-label="Posisi video">
+              <span class="video-time">{{ playerStates[0]?.currentTimeFormatted || "0:00" }} / {{ playerStates[0]?.durationFormatted || "0:00" }}</span>
+              <button class="video-control-button video-mute" type="button" @click="toggleMute(0)">{{ playerStates[0]?.isMuted ? "🔇" : "🔊" }}</button>
+              <button class="video-control-button video-fullscreen" type="button" @click="toggleFullscreen(0)">⛶</button>
+            </div>
+          </div>
+
+          <div class="bookmarks-container" v-if="courseData[0]?.bookmarks?.length > 0">
+            <button class="bookmark-btn" v-for="bm in courseData[0].bookmarks" :key="bm.label" @click="seekToBookmark(0, bm.time)">
+              <span class="bookmark-time">{{ formatVideoTime(bm.time) }}</span> {{ bm.label }}
+            </button>
+          </div>
+        </section>
 
         <section class="step-panel" id="step-1" v-show="currentStep === 1">
           <div class="video-frame" :class="{ 'player-ready': playerStates[1]?.isReady }" data-video-step="1">
@@ -2943,10 +2994,10 @@ risk_level = ""
         </section>
 
         <div class="nav-buttons">
-          <button class="nav-button secondary" type="button" :disabled="currentStep === 1" @click="prevStep()">
+          <button class="nav-button secondary" type="button" :disabled="currentStep === 0" @click="prevStep()">
             ← Modul Sebelumnya
           </button>
-          <button class="nav-button primary" type="button" :disabled="currentStep === 7" @click="nextStep()">
+          <button class="nav-button primary" type="button" :disabled="currentStep === maxStep" @click="nextStep()">
             Modul Berikutnya →
           </button>
         </div>

@@ -1,4 +1,18 @@
 export const courseData = {
+  0: {
+    kicker: "Video 00 · Orientasi",
+    title: "Introduction to Async Learning",
+    duration: "Video 00 · Pengenalan",
+    videoId: "yxmLOk5vcFg",
+    bookmarks: [
+      { "time": 0, "label": "Pengenalan Async Learning" },
+      { "time": 25, "label": "Ritme Belajar & Pause" },
+      { "time": 55, "label": "Alur Belajar Step-by-Step" },
+      { "time": 85, "label": "Pop-up Quiz Interaktif" },
+      { "time": 115, "label": "Materi Bacaan & Praktik Mandiri" }
+    ],
+    quizzes: []
+  },
   1: {
     kicker: "Checkpoint 01 · Mulai di sini",
     title: "Bagaimana Program Bisa Memilih?",
