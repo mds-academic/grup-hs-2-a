@@ -56,6 +56,10 @@ const maxStep = computed(() => Math.max(...Object.keys(courseData).map(Number)))
 const totalSteps = Object.keys(courseData).length;
 const APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz58EffczfpcNL0bvbD6VZvrY3mrVNtmpWasSwJT0baOowD2yGu_KNM0YNul9EtxxKVpg/exec';
 const LEARNING_STATE_STORAGE_KEY = 'mds_ghs2a_learning_state';
+const getLearningStateStorageKey = (email = studentData.value.email) => email ? `${LEARNING_STATE_STORAGE_KEY}:${String(email).toLowerCase().trim()}` : LEARNING_STATE_STORAGE_KEY;
+const PROGRESS_STORAGE_PREFIX = 'mds_ghs2a_progress:';
+const LOGIN_STORAGE_KEY = 'mds_ghs2a_login';
+const getProgressStorageKey = (email = studentData.value.email) => `${PROGRESS_STORAGE_PREFIX}${String(email || '').toLowerCase().trim()}`;
 const isLoggedIn = ref(false);
 const loginSchool = ref('');
 const loginEmail = ref('');
@@ -165,7 +169,7 @@ Object.keys(courseData).forEach(stepId => {
 
 const saveProgress = (key, value) => {
   studentProgress.value[key] = value;
-  localStorage.setItem('mds_student_progress', JSON.stringify(studentProgress.value));
+  localStorage.setItem(getProgressStorageKey(), JSON.stringify(studentProgress.value));
   syncToSheets();
 };
 
@@ -177,7 +181,7 @@ const markQuestionFailed = (qid) => {
   if (qid === 'V6_Q1') studentProgress.value['V6_Needs_Ans'] = '0';
   if (qid === 'V6_Q2') studentProgress.value['V6_Wants_Ans'] = '0';
   if (qid === 'V6_Q3') studentProgress.value['V6_IDE_Code'] = '0';
-  localStorage.setItem('mds_student_progress', JSON.stringify(studentProgress.value));
+  localStorage.setItem(getProgressStorageKey(), JSON.stringify(studentProgress.value));
   syncToSheets();
 };
 
@@ -240,14 +244,15 @@ const handleLogin = async () => {
       studentData.value = { name: data.name, school: data.school, email: data.email };
       isLoggedIn.value = true;
       loginEmailAttempts.value = 0;
-      localStorage.setItem('mds_student_login', JSON.stringify(studentData.value));
+      localStorage.setItem(LOGIN_STORAGE_KEY, JSON.stringify(studentData.value));
+      restoreLearningState();
 
       // SINKRONISASI CLOUD & RESET BERSIH
       if (!data.existsInResult || !data.progress || Object.keys(data.progress).length === 0) {
         console.log('[MDS] Data reset terdeteksi dari sheet. Menghapus cache lokal.');
         studentProgress.value = {};
-        localStorage.removeItem('mds_student_progress');
-        localStorage.removeItem(LEARNING_STATE_STORAGE_KEY);
+        localStorage.removeItem(getProgressStorageKey());
+        localStorage.removeItem(getLearningStateStorageKey());
         currentStep.value = 0;
         Object.keys(videoWatchedStatus.value).forEach(k => { videoWatchedStatus.value[k] = false; });
         Object.keys(courseData).forEach(s => {
@@ -255,7 +260,8 @@ const handleLogin = async () => {
         });
       } else {
         console.log('[MDS] Restore progress dari Google Sheets:', data.progress);
-        studentProgress.value = { ...studentProgress.value, ...data.progress };
+        // Google Sheets adalah source of truth; cache browser tidak boleh menimpa data cloud.
+        studentProgress.value = { ...data.progress };
         if (studentProgress.value['V6_Needs_Ans'] && !studentProgress.value['V6_Q1_Ans']) {
           studentProgress.value['V6_Q1_Ans'] = studentProgress.value['V6_Needs_Ans'];
         }
@@ -265,7 +271,7 @@ const handleLogin = async () => {
         if (studentProgress.value['V6_IDE_Code'] && !studentProgress.value['V6_Q3_Ans']) {
           studentProgress.value['V6_Q3_Ans'] = studentProgress.value['V6_IDE_Code'];
         }
-        localStorage.setItem('mds_student_progress', JSON.stringify(studentProgress.value));
+        localStorage.setItem(getProgressStorageKey(), JSON.stringify(studentProgress.value));
       }
 
       debugLearningEvent('Login berhasil', { status: 'login_berhasil' });
@@ -375,13 +381,20 @@ const toggleEmailHelp = () => {
 };
 
 
+const handleVisibilityChange = () => {
+  if (document.hidden) pauseAllMediaExcept(-1);
+  else if (isLoggedIn.value) pauseAllMediaExcept(currentStep.value);
+};
+
 onUnmounted(() => {
   window.removeEventListener('resize', updateWidth);
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  pauseAllMediaExcept(-1);
 });
 
 const handleLogout = () => {
   pauseAllMediaExcept(-1);
-  localStorage.removeItem('mds_student_login');
+  localStorage.removeItem(LOGIN_STORAGE_KEY);
   isLoggedIn.value = false;
   loginSchool.value = '';
   loginEmail.value = '';
@@ -409,15 +422,16 @@ const checkCloudProgressOnMount = async () => {
       if (!data.existsInResult) {
         console.log('[MDS] Reset admin terdeteksi saat mount. Reset progress lokal.');
         studentProgress.value = {};
-        localStorage.removeItem('mds_student_progress');
-        localStorage.removeItem(LEARNING_STATE_STORAGE_KEY);
+        localStorage.removeItem(getProgressStorageKey());
+        localStorage.removeItem(getLearningStateStorageKey());
         currentStep.value = 0;
         Object.keys(videoWatchedStatus.value).forEach(k => { videoWatchedStatus.value[k] = false; });
         Object.keys(courseData).forEach(s => {
           (courseData[s].quizzes || []).forEach(q => { q.shown = false; });
         });
       } else if (data.progress && Object.keys(data.progress).length > 0) {
-        studentProgress.value = { ...studentProgress.value, ...data.progress };
+        // Google Sheets adalah source of truth; cache browser tidak boleh menimpa data cloud.
+        studentProgress.value = { ...data.progress };
         if (studentProgress.value['V6_Needs_Ans'] && !studentProgress.value['V6_Q1_Ans']) {
           studentProgress.value['V6_Q1_Ans'] = studentProgress.value['V6_Needs_Ans'];
         }
@@ -427,7 +441,7 @@ const checkCloudProgressOnMount = async () => {
         if (studentProgress.value['V6_IDE_Code'] && !studentProgress.value['V6_Q3_Ans']) {
           studentProgress.value['V6_Q3_Ans'] = studentProgress.value['V6_IDE_Code'];
         }
-        localStorage.setItem('mds_student_progress', JSON.stringify(studentProgress.value));
+        localStorage.setItem(getProgressStorageKey(), JSON.stringify(studentProgress.value));
       }
     }
   } catch(e) {
@@ -438,16 +452,14 @@ const checkCloudProgressOnMount = async () => {
 onMounted(() => {
   window.addEventListener('resize', updateWidth);
 
-  const savedLogin = localStorage.getItem('mds_student_login');
+  const savedLogin = localStorage.getItem(LOGIN_STORAGE_KEY);
   if (savedLogin) {
     studentData.value = JSON.parse(savedLogin);
     isLoggedIn.value = true;
     checkCloudProgressOnMount();
   }
-  const savedProgress = localStorage.getItem('mds_student_progress');
-  if (savedProgress) {
-    studentProgress.value = JSON.parse(savedProgress);
-  }
+  // Progress answers are loaded from Sheets by checkCloudProgressOnMount().
+  // This prevents deleted cloud rows being resurrected by an old cache.
   restoreLearningState();
 });
 
@@ -570,14 +582,14 @@ const persistLearningState = ({ force = false, activeQuiz } = {}) => {
     updatedAt: new Date().toISOString()
   };
 
-  localStorage.setItem(LEARNING_STATE_STORAGE_KEY, JSON.stringify(state));
+  localStorage.setItem(getLearningStateStorageKey(), JSON.stringify(state));
 };
 
 const restoreLearningState = () => {
   learningStateHydrated = true;
 
   try {
-    const savedState = JSON.parse(localStorage.getItem(LEARNING_STATE_STORAGE_KEY) || 'null');
+    const savedState = JSON.parse(localStorage.getItem(getLearningStateStorageKey()) || 'null');
     if (!savedState || typeof savedState !== 'object') return;
 
     const restoredStep = Number(savedState.currentStep);
@@ -915,7 +927,8 @@ const initializeYouTubePlayer = (stepId) => {
       fs: 0,
       iv_load_policy: 3,
       start: courseData[normalizedStepId].startSeconds || 0,
-      origin: window.location.origin
+      origin: window.location.origin,
+      autoplay: 0
     },
     events: {
       onReady: (event) => {
@@ -924,11 +937,13 @@ const initializeYouTubePlayer = (stepId) => {
         iframe.setAttribute("tabindex", "-1");
         iframe.setAttribute("aria-hidden", "true");
         
+        // Never autoplay merely because a tab was mounted or revisited.
+        if (typeof event.target.pauseVideo === 'function') event.target.pauseVideo();
         playerStates.value[normalizedStepId].isReady = true;
         playerStates.value[normalizedStepId].duration = event.target.getDuration() || 0;
         
         enforceVideoStartBoundary(normalizedStepId);
-        const savedState = JSON.parse(localStorage.getItem(LEARNING_STATE_STORAGE_KEY) || 'null');
+        const savedState = JSON.parse(localStorage.getItem(getLearningStateStorageKey()) || 'null');
         const savedVideoTime = Number(savedState?.lastVideoTime?.[normalizedStepId]) || 0;
         const startBoundary = getVideoStartBoundary(normalizedStepId);
         if (savedVideoTime > startBoundary + 1 && typeof event.target.seekTo === 'function') {
@@ -1096,7 +1111,7 @@ const openQuiz = (questionsArray, shouldResume = false, seekTime = null, quizCon
 };
 
 const closeQuiz = (resumeVideo = false, seekTime = null) => {
-  const stepId = currentStep.value;
+  const stepId = quizState.value.activeQuizStep ?? currentStep.value;
   const player = players[stepId];
   const currentTime = (player && typeof player.getCurrentTime === 'function') ? player.getCurrentTime() : 0;
   const isEnded = Boolean(
@@ -1302,7 +1317,7 @@ const handleStandardAnswer = (answer) => {
   quizState.value.selectedChoice = answer;
   if (item.qid) {
     studentProgress.value[attKey] = attempts;
-    localStorage.setItem('mds_student_progress', JSON.stringify(studentProgress.value));
+    localStorage.setItem(getProgressStorageKey(), JSON.stringify(studentProgress.value));
     syncToSheets();
   } else {
     failedAttempts.value[item.question] = attempts;
@@ -1866,6 +1881,7 @@ const exposeGlobalMethods = () => {
 };
 
 onMounted(() => {
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   quizObj.onValuesChange((values) => {
     quizModalStyles.value = {
       transform: `translateY(${values.y}px) scale(${values.scale})`,
@@ -1936,10 +1952,7 @@ const getStepQuizProgress = (stepId) => {
   const requiredQuizzes = (courseData[stepId]?.quizzes || [])
     .map((quiz) => {
       const requiredQuestions = (quiz.questions || []).filter(q => q.qid && q.type !== 'info' && q.continueOnly !== true);
-      const isCompleted = requiredQuestions.length === 0 || requiredQuestions.every(q => {
-        const ans = studentProgress.value[`${q.qid}_Ans`];
-        return ans !== undefined && ans !== null && ans !== '';
-      });
+      const isCompleted = requiredQuestions.length === 0 || requiredQuestions.every(isQuestionCompleted);
       const isActive = quizState.value.isOpen &&
         Number(quizState.value.activeQuizStep) === Number(stepId) &&
         quiz === quizState.value.activeQuizConfig;
